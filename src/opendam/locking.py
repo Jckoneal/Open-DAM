@@ -74,13 +74,14 @@ def current_identity(repo: Path) -> dict:
     return {"user": email, "git_name": name, "hostname": socket.gethostname()}
 
 
-def claim_lock(repo: Path, project_file: Path, remote: str = "origin", branch: str = "main") -> Lock:
+def claim_lock(repo: Path, project_file: Path, remote: str = "origin", branch: Optional[str] = None) -> Lock:
     """Optimistic pull -> check -> claim -> push -> verify loop.
 
     Returns the winning Lock on success. Raises LockHeldError if someone
     else holds (or wins the race for) the lock, or StaleLockRaceError if the
     remote stays contended past MAX_CLAIM_RETRIES.
     """
+    branch = branch or git_ops.current_branch(repo)
     identity = current_identity(repo)
     lpath = lock_path_for(project_file)
     my_lock_id = str(uuid.uuid4())
@@ -142,8 +143,6 @@ def release_lock(
     repo: Path,
     project_file: Path,
     identity: dict,
-    remote: str = "origin",
-    branch: str = "main",
     force: bool = False,
     forced_by: Optional[dict] = None,
 ) -> Lock:

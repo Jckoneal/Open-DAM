@@ -50,26 +50,43 @@ def run_git(args: list[str], cwd: Path, check: bool = True) -> GitResult:
         returncode=proc.returncode,
     )
     if check and not result.ok:
-        lowered = result.stderr.lower()
-        if any(marker in lowered for marker in NETWORK_ERROR_MARKERS):
-            raise RemoteUnreachableError(result.stderr.strip())
-        raise GitCommandError(args, result.returncode, result.stderr)
+        _raise_git_error(args, result)
     return result
+
+
+def _raise_git_error(args: list[str], result: GitResult) -> None:
+    lowered = result.stderr.lower()
+    if any(marker in lowered for marker in NETWORK_ERROR_MARKERS):
+        raise RemoteUnreachableError(result.stderr.strip())
+    raise GitCommandError(args, result.returncode, result.stderr)
+
+
+def _is_unborn_remote_branch(result: GitResult) -> bool:
+    """True when a pull failed only because the remote branch doesn't exist
+    yet — a brand-new remote nobody has pushed to. Nothing to pull; the
+    first push will create the branch."""
+    return "couldn't find remote ref" in result.stderr.lower()
 
 
 def fetch(repo: Path, remote: str = "origin") -> GitResult:
     return run_git(["fetch", remote], repo)
 
 
-def pull_ff_only(repo: Path, remote: str = "origin", branch: str = "main") -> GitResult:
-    return run_git(["pull", "--ff-only", remote, branch], repo)
+def pull_ff_only(repo: Path, remote: str = "origin", branch: str | None = None) -> GitResult:
+    branch = branch or current_branch(repo)
+    args = ["pull", "--ff-only", remote, branch]
+    result = run_git(args, repo, check=False)
+    if not result.ok and not _is_unborn_remote_branch(result):
+        _raise_git_error(args, result)
+    return result
 
 
-def pull_rebase(repo: Path, remote: str = "origin", branch: str = "main") -> GitResult:
+def pull_rebase(repo: Path, remote: str = "origin", branch: str | None = None) -> GitResult:
     """Rebase our own not-yet-pushed commit onto a remote that advanced with
     unrelated commits. Safe here because the lock invariant guarantees only
     the lock holder touches a given project's files, so this can only
     replay cleanly — never a real content conflict."""
+    branch = branch or current_branch(repo)
     return run_git(["pull", "--rebase", remote, branch], repo, check=False)
 
 
@@ -89,10 +106,11 @@ def discard_path(repo: Path, path: str) -> None:
         Path(path).unlink()
 
 
-def push(repo: Path, remote: str = "origin", branch: str = "main") -> GitResult:
+def push(repo: Path, remote: str = "origin", branch: str | None = None) -> GitResult:
     """Push without raising on non-fast-forward rejection — callers need to
     distinguish that from a hard failure to drive the retry loop."""
-    return run_git(["push", remote, branch], repo, check=False)
+    branch = branch or current_branch(repo)
+    return run_git(["push", "-u", remote, branch], repo, check=False)
 
 
 def is_push_rejected(result: GitResult) -> bool:
@@ -133,5 +151,10 @@ def get_config(repo: Path, key: str) -> str | None:
 
 
 def current_branch(repo: Path) -> str:
-    result = run_git(["rev-parse", "--abbrev-ref", "HEAD"], repo)
-    return result.stdout.strip()
+    """Name of the checked-out branch. `symbolic-ref` (not `rev-parse`)
+    because it also works on an unborn branch — a fresh clone of an empty
+    remote, where no commit exists yet."""
+    result = run_git(["symbolic-ref", "--short", "HEAD"], repo, check=False)
+    if result.ok:
+        return result.stdout.strip()
+    return "main"  # detached HEAD — shouldn't happen in a DAM repo, but don't crash

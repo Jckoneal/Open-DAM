@@ -37,5 +37,14 @@ def alice(bare_repo, tmp_path):
 
 
 @pytest.fixture
+def empty_remote_clone(tmp_path):
+    """A clone of a brand-new remote that has never been pushed to — the
+    state right after creating an empty repo on GitHub and cloning it."""
+    bare = tmp_path / "empty_origin.git"
+    _run(["init", "--bare", "-b", "main", str(bare)], tmp_path)
+    return _init_user_clone(bare, tmp_path / "fresh", "alice@example.com", "Alice")
+
+
+@pytest.fixture
 def bob(bare_repo, tmp_path):
     return _init_user_clone(bare_repo, tmp_path / "bob", "bob@example.com", "Bob")

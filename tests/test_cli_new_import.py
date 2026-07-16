@@ -126,6 +126,32 @@ def test_import_with_move_and_checkout(alice, tmp_path, monkeypatch):
     assert fake.launched == [imported]
 
 
+def test_new_on_empty_remote(empty_remote_clone, tmp_path, monkeypatch):
+    """First-ever project in a freshly created (never-pushed) remote repo —
+    there's no remote branch to pull yet, which must not crash; the first
+    push creates it."""
+    template = tmp_path / "HouseStyle.prproj"
+    template.write_text("TEMPLATE CONTENT\n")
+    _set_template(empty_remote_clone, template)
+
+    fake = FakeLauncher()
+    monkeypatch.setattr(cli, "get_launcher", lambda: fake)
+
+    result = runner.invoke(cli.app, ["new", "FirstEver", "--repo", str(empty_remote_clone)])
+    assert result.exit_code == 0, result.output
+
+    created = empty_remote_clone / "FirstEver.prproj"
+    lock = Lock.load(lock_path_for(created))
+    assert lock.status == "locked"
+    # and the push actually created the remote branch
+    import subprocess
+    heads = subprocess.run(
+        ["git", "ls-remote", "--heads", "origin"],
+        cwd=str(empty_remote_clone), capture_output=True, text=True, check=True,
+    ).stdout
+    assert "refs/heads/" in heads
+
+
 def _log(repo: Path) -> list[str]:
     import subprocess
     result = subprocess.run(

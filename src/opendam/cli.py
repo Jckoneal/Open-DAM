@@ -25,12 +25,36 @@ console = Console()
 
 
 def _repo(ctx_path: Optional[str] = None) -> Path:
-    return Path(ctx_path or Path.cwd()).resolve()
+    """Resolve and validate the DAM repo, returning its root. Guards every
+    command against running somewhere that isn't a git repo at all (e.g.
+    `dam init` from the home directory), which would otherwise surface as a
+    confusing GitCommandError from whatever git call happens to run first."""
+    path = Path(ctx_path or Path.cwd()).resolve()
+    if not path.exists():
+        _fail(f"'{path}' does not exist.")
+    result = git_ops.run_git(["rev-parse", "--show-toplevel"], path, check=False)
+    if not result.ok:
+        _fail(
+            f"'{path}' is not inside a DAM git repo — cd into your cloned repo or pass --repo. "
+            f"To set one up: 'dam clone <remote-url>'.\n(git said: {result.stderr.strip()})"
+        )
+    return Path(result.stdout.strip())
 
 
 def _fail(message: str) -> None:
     console.print(f"[bold red]Error:[/bold red] {message}")
     raise typer.Exit(code=1)
+
+
+def _clean_path_input(raw: str) -> Optional[str]:
+    """Normalize a path the user typed or dragged into the terminal: shell
+    escapes (`Jacks\\ SSD\\ 2`), surrounding quotes, stray whitespace, and
+    `~` all arrive verbatim from a prompt and would fail existence checks
+    if stored as-is."""
+    cleaned = raw.strip().strip("'\"").replace("\\ ", " ").strip()
+    if not cleaned:
+        return None
+    return str(Path(cleaned).expanduser())
 
 
 def _push_with_retry(repo_path: Path) -> None:
@@ -61,14 +85,14 @@ def init(repo: str = typer.Option(".", help="Path to the DAM git repo")) -> None
 
     email = git_ops.get_config(repo_path, "user.email")
     if not email:
-        email = typer.prompt("Your git user.email (used to attribute locks)")
+        email = typer.prompt("Your git user.email (used to attribute locks)").strip()
         git_ops.run_git(["config", "--global", "user.email", email], repo_path)
 
     media_root = typer.prompt(
         "Path to your local media root (same relative layout as other editors)",
         default=cfg.media_root or "",
     )
-    cfg.media_root = media_root or None
+    cfg.media_root = _clean_path_input(media_root)
     if cfg.media_root and not Path(cfg.media_root).exists():
         console.print(f"[yellow]Warning:[/yellow] media_root '{cfg.media_root}' does not exist on this machine yet.")
 
@@ -86,13 +110,13 @@ def init(repo: str = typer.Option(".", help="Path to the DAM git repo")) -> None
     else:
         console.print("[yellow]No Premiere Pro installation auto-discovered.[/yellow]")
         manual = typer.prompt("Path to Premiere Pro app (leave blank to skip)", default="")
-        cfg.premiere.app_path = manual or None
+        cfg.premiere.app_path = _clean_path_input(manual)
 
     template = typer.prompt(
         "Path to a template .prproj for 'dam new' (leave blank to skip)",
         default=cfg.template_path or "",
     )
-    cfg.template_path = template or None
+    cfg.template_path = _clean_path_input(template)
 
     cfg.save(repo_path)
     _ensure_gitignored(repo_path)
@@ -462,6 +486,8 @@ def config_set(key: str, value: str, repo: str = typer.Option(".")) -> None:
     repo_path = _repo(repo)
     cfg = config_mod.Config.load(repo_path)
     parts = key.split(".")
+    if key in ("media_root", "template_path", "premiere.app_path", "premiere.exe_path"):
+        value = _clean_path_input(value)
 
     if parts[0] == "premiere":
         if len(parts) != 2 or parts[1] not in config_mod.PremiereConfig.__dataclass_fields__:
