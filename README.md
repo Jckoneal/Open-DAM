@@ -1,0 +1,138 @@
+# Open-DAM
+
+A Git-based checkout manager for Adobe Premiere Pro projects.
+
+Premiere Pro project files (`.prproj`) can't be merged the way text files can. If two
+editors modify the same project on different machines, there's no reconciling the
+conflict — someone's work gets lost. Open-DAM adds a Perforce/Git-LFS-lock-style
+workflow on top of a plain Git repo: before editing a project you "check it out"
+through the `dam` CLI, which pulls the latest version, claims an exclusive lock so
+nobody else can also check it out, and launches Premiere Pro directly on the file.
+When you're done, "check in" commits, pushes, and releases the lock for the next
+person.
+
+Raw footage/audio is **not** stored in Git. Every editor's machine has the same
+source media pre-populated at the same relative path, so Premiere's relative media
+links resolve identically everywhere — Git only ever tracks the small `.prproj`
+files and their lock metadata.
+
+## How locking works
+
+Each project has a sibling lock file committed alongside it on `main`:
+
+```
+Projects/MyShow_Ep01.prproj
+Projects/MyShow_Ep01.prproj.lock.json
+```
+
+`dam checkout` runs an optimistic pull → check → claim → push → verify loop: it
+pulls the latest lock state, refuses if someone else already holds it, otherwise
+writes a new lock (your identity, a timestamp, a UUID) and pushes. If two people
+race for the same project, exactly one push wins — the loser re-pulls, sees who won,
+and gets a clear rejection. Locking different projects never contends with each
+other, since each project's lock lives in its own file.
+
+There is no separate lock server and no per-project/per-user branch — everything
+lives on one shared `main` branch, and the lock file *is* the mutex. See
+[docs/design.md](docs/design.md) if you want the full rationale, including why
+branches alone don't solve this problem.
+
+## Installation
+
+Requires Python 3.9+ and Git.
+
+```bash
+pip install -e .
+```
+
+This installs the `dam` command (via the `[project.scripts]` entry point in
+`pyproject.toml`).
+
+## Quickstart
+
+**First-time setup for a new team member**, once the DAM repo already exists on a
+remote:
+
+```bash
+dam clone git@github.com:your-org/your-premiere-projects.git --dir ~/dam/your-project
+cd ~/dam/your-project
+dam init      # sets git identity, local media root, discovers your Premiere install
+dam doctor    # confirms everything checks out
+```
+
+**Day-to-day workflow:**
+
+```bash
+dam list                    # see all projects and their lock status
+dam checkout MyShow_Ep01     # pull latest, claim the lock, launch Premiere
+# ... edit in Premiere, save, close ...
+dam checkin MyShow_Ep01      # commit, push, release the lock
+```
+
+**If you need to step away without finishing:**
+
+```bash
+dam checkin MyShow_Ep01 --keep-lock   # push your progress, keep the lock
+dam release MyShow_Ep01               # or give up the lock with no commit
+```
+
+**Recovering a stale lock** (someone force-quit without checking in — never done
+automatically, always a deliberate human action):
+
+```bash
+dam status MyShow_Ep01       # check how old the lock is and who holds it
+dam release MyShow_Ep01 --force
+```
+
+## Command reference
+
+| Command | Purpose |
+|---|---|
+| `dam init` | Interactive wizard: git identity, media root, Premiere path → `.damconfig.yaml` |
+| `dam clone <remote-url>` | Clone the DAM repo and set up local config |
+| `dam list` | Table of all projects: name, lock status, holder, since |
+| `dam status [<project>]` | Detailed lock + local working-tree status |
+| `dam checkout <project>` | Pull, claim the lock, launch Premiere (`--no-launch`, `--force`) |
+| `dam checkin <project>` | Commit, push, release the lock (`-m`, `--force-checkin`, `--keep-lock`) |
+| `dam release <project>` | Release the lock without committing (`--force`, `--discard-local`) |
+| `dam config get/set` | Read/write `.damconfig.yaml` values |
+| `dam doctor` | Diagnostics: git, remote, Premiere path, media root |
+
+## Configuration
+
+Each clone has its own `.damconfig.yaml` at the repo root (gitignored — it's
+per-machine, not shared history):
+
+```yaml
+schema_version: 1
+remote: git@github.com:your-org/your-premiere-projects.git
+media_root: /Volumes/EDIT_SSD/ProjectMedia
+premiere:
+  app_path: "/Applications/Adobe Premiere Pro 2026/Adobe Premiere Pro 2026.app"
+stale_lock_hours: 24
+```
+
+Git identity (`user.name`/`user.email`) is read from your existing global Git
+config, not duplicated here — it's what locks are attributed to.
+
+## Platform support
+
+macOS is fully supported. Windows launching (`WindowsLauncher` in
+`src/opendam/launcher.py`) is scaffolded but unvalidated — it needs testing on real
+Windows hardware before relying on it.
+
+## Development
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -e ".[dev]"
+.venv/bin/pytest
+```
+
+Tests spin up real local bare Git repositories in `tmp_path` and exercise the actual
+`git` binary (no mocking) — including a concurrency test that races two real
+`dam checkout` calls against the same repo to verify exactly one wins.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
