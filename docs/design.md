@@ -82,3 +82,21 @@ status`/`dam list` surface its age, but recovering it is always a deliberate
 and an audit record (`forced_by`) written into the resulting lock file. A small team
 doesn't need real RBAC for this; the confirmation-plus-audit-trail is deliberately
 the whole mechanism for v1.
+
+## Creating and importing projects
+
+`dam new` and `dam import` both register a project in two separate commits rather
+than one atomic commit: first "here's the new/imported file" (plain add+commit+push,
+no locking concerns yet — nobody else's clone even knows this project exists until
+this lands), then a normal `claim_lock` call for the lock file. This is simpler than
+trying to fold file-creation and lock-claiming into one commit, and there's no race
+to guard against in the first commit, since no other clone can be contending for a
+lock file whose project they don't know about yet.
+
+For `dam new` specifically: there is no way to drive Premiere into creating a new
+project with particular settings from the outside (no scriptable "new project" hook
+reachable from a CLI, same limitation as save/close — see above). If a `template_path`
+is configured, `dam new` just copies that file in, which sidesteps the problem
+entirely. Without one, it launches a blank Premiere and waits for you to create and
+save the project yourself at the path it gives you, then confirms the file exists
+before committing it — the same "ask, don't detect" pattern as `checkin`.

@@ -60,6 +60,28 @@ dam init      # sets git identity, local media root, discovers your Premiere ins
 dam doctor    # confirms everything checks out
 ```
 
+**Starting a brand-new project:**
+
+```bash
+dam new MyShow_Ep02
+```
+
+If a `template_path` is configured (set during `dam init`, or via
+`dam config set template_path <path>`), it's copied in as the starting point. Otherwise
+`dam new` launches a blank Premiere and asks you to save your new project at the path
+it gives you. Either way, it commits + pushes the new project and immediately claims
+the lock for you (Premiere doesn't have a scriptable "create a new project with these
+settings" hook, so this is as far outside-in automation can go — you still drive the
+actual project creation inside Premiere's own UI when there's no template).
+
+**Bringing an existing `.prproj` under management:**
+
+```bash
+dam import ~/Desktop/SomeProject.prproj          # copies it in, keeps the original
+dam import ~/Desktop/SomeProject.prproj --move   # copies it in, deletes the original
+dam import ~/Desktop/SomeProject.prproj MyShow_Ep03 --checkout   # rename + claim the lock
+```
+
 **Day-to-day workflow:**
 
 ```bash
@@ -88,8 +110,10 @@ dam release MyShow_Ep01 --force
 
 | Command | Purpose |
 |---|---|
-| `dam init` | Interactive wizard: git identity, media root, Premiere path → `.damconfig.yaml` |
+| `dam init` | Interactive wizard: git identity, media root, Premiere path, template → `.damconfig.yaml` |
 | `dam clone <remote-url>` | Clone the DAM repo and set up local config |
+| `dam new <name>` | Create a new project (from template, or via a blank Premiere launch), register it, claim the lock (`--no-launch`) |
+| `dam import <source> [name]` | Register an existing `.prproj` (`--move`, `--checkout`) |
 | `dam list` | Table of all projects: name, lock status, holder, since |
 | `dam status [<project>]` | Detailed lock + local working-tree status |
 | `dam checkout <project>` | Pull, claim the lock, launch Premiere (`--no-launch`, `--force`) |
@@ -110,6 +134,7 @@ media_root: /Volumes/EDIT_SSD/ProjectMedia
 premiere:
   app_path: "/Applications/Adobe Premiere Pro 2026/Adobe Premiere Pro 2026.app"
 stale_lock_hours: 24
+template_path: /Volumes/EDIT_SSD/Templates/HouseStyle.prproj
 ```
 
 Git identity (`user.name`/`user.email`) is read from your existing global Git

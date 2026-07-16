@@ -30,6 +30,7 @@ class Config:
     media_root: Optional[str] = None
     premiere: PremiereConfig = field(default_factory=PremiereConfig)
     stale_lock_hours: int = DEFAULT_STALE_LOCK_HOURS
+    template_path: Optional[str] = None
 
     @classmethod
     def load(cls, repo: Path) -> "Config":
@@ -38,8 +39,17 @@ class Config:
             return cls()
         raw = yaml.safe_load(path.read_text()) or {}
         premiere_raw = raw.pop("premiere", {}) or {}
+        if isinstance(premiere_raw, str):
+            # Recovers from a pre-fix `dam config set premiere <path>` (the
+            # bare key, not `premiere.app_path`), which used to overwrite
+            # this whole section with a plain string instead of a mapping.
+            premiere_raw = {"app_path": premiere_raw}
+        elif not isinstance(premiere_raw, dict):
+            premiere_raw = {}
         cfg = cls(**{k: v for k, v in raw.items() if k in cls.__dataclass_fields__})
-        cfg.premiere = PremiereConfig(**premiere_raw)
+        cfg.premiere = PremiereConfig(
+            **{k: v for k, v in premiere_raw.items() if k in PremiereConfig.__dataclass_fields__}
+        )
         return cfg
 
     def save(self, repo: Path) -> None:

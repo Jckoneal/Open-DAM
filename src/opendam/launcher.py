@@ -17,8 +17,22 @@ from typing import Optional
 from opendam.errors import PremiereNotFoundError
 
 
+def _require_app_path(app_path: Optional[str], hint: str) -> str:
+    if not app_path:
+        raise PremiereNotFoundError(f"No Premiere Pro app configured. {hint}")
+    if not Path(app_path).exists():
+        raise PremiereNotFoundError(f"Configured Premiere Pro app not found at {app_path}")
+    return app_path
+
+
 class Launcher:
     def launch(self, prproj_path: Path, app_path: Optional[str]) -> None:
+        raise NotImplementedError
+
+    def launch_blank(self, app_path: Optional[str]) -> None:
+        """Launch Premiere with no project file, for creating a brand-new
+        project through its own UI (there is no scriptable "create project
+        with these settings" hook to drive from the outside)."""
         raise NotImplementedError
 
     def is_running(self) -> bool:
@@ -27,13 +41,12 @@ class Launcher:
 
 class MacLauncher(Launcher):
     def launch(self, prproj_path: Path, app_path: Optional[str]) -> None:
-        if not app_path:
-            raise PremiereNotFoundError(
-                "No Premiere Pro app configured. Run 'dam init' or 'dam config set premiere.app_path <path>'."
-            )
-        if not Path(app_path).exists():
-            raise PremiereNotFoundError(f"Configured Premiere Pro app not found at {app_path}")
+        app_path = _require_app_path(app_path, "Run 'dam init' or 'dam config set premiere.app_path <path>'.")
         subprocess.run(["open", "-a", app_path, str(prproj_path)], check=True)
+
+    def launch_blank(self, app_path: Optional[str]) -> None:
+        app_path = _require_app_path(app_path, "Run 'dam init' or 'dam config set premiere.app_path <path>'.")
+        subprocess.run(["open", "-a", app_path], check=True)
 
     def is_running(self) -> bool:
         result = subprocess.run(
@@ -46,13 +59,12 @@ class WindowsLauncher(Launcher):
     """Phase 2 — not yet implemented/validated on real Windows hardware."""
 
     def launch(self, prproj_path: Path, app_path: Optional[str]) -> None:
-        if not app_path:
-            raise PremiereNotFoundError(
-                "No Premiere Pro executable configured. Run 'dam config set premiere.exe_path <path>'."
-            )
-        if not Path(app_path).exists():
-            raise PremiereNotFoundError(f"Configured Premiere Pro executable not found at {app_path}")
+        app_path = _require_app_path(app_path, "Run 'dam config set premiere.exe_path <path>'.")
         subprocess.run([app_path, str(prproj_path)], check=True)
+
+    def launch_blank(self, app_path: Optional[str]) -> None:
+        app_path = _require_app_path(app_path, "Run 'dam config set premiere.exe_path <path>'.")
+        subprocess.run([app_path], check=True)
 
     def is_running(self) -> bool:
         result = subprocess.run(
