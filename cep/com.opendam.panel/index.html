@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Open-DAM</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="setup" class="hidden">
+    <h2>Open-DAM setup</h2>
+    <label>Project library folder
+      <input type="text" id="repoPath" placeholder="/Users/you/Premiere-Projects">
+    </label>
+    <label>Path to the dam command
+      <input type="text" id="damPath" placeholder="auto-detect">
+    </label>
+    <button id="saveSettings">Save</button>
+    <div id="setupError" class="error"></div>
+  </div>
+
+  <div id="main" class="hidden">
+    <div class="toolbar">
+      <button id="refresh" title="Refresh">&#8635;</button>
+      <button id="newProject">New&hellip;</button>
+      <button id="settings" title="Settings">&#9881;</button>
+    </div>
+    <div id="newRow" class="hidden">
+      <input type="text" id="newName" placeholder="New project name">
+      <button id="createNew" class="primary">Create</button>
+      <button id="cancelNew">Cancel</button>
+    </div>
+    <div id="projects"></div>
+    <div id="statusLine"></div>
+  </div>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

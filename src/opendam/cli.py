@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 from typing import Optional
@@ -212,7 +213,17 @@ def new(
                 launched_already = True
             except OpenDamError as e:
                 console.print(f"[yellow]Could not launch Premiere automatically:[/yellow] {e}")
-        if not typer.confirm(f"Have you saved the new project at {target_path}?"):
+        try:
+            confirmed = typer.confirm(f"Have you saved the new project at {target_path}?")
+        except typer.Abort:
+            # Stdin ran dry — a non-interactive caller (the Premiere panel)
+            # that can't drive the create-it-yourself-then-confirm flow.
+            _fail(
+                "No template project is configured, and 'dam new' without one needs an "
+                "interactive terminal. Set one with 'dam config set template_path <path>'."
+            )
+            return
+        if not confirmed:
             console.print("Aborted — nothing created.")
             return
         if not target_path.exists():
@@ -261,9 +272,37 @@ def import_project(
 
 
 @app.command(name="list")
-def list_projects(repo: str = typer.Option(".", help="Path to the DAM repo")) -> None:
+def list_projects(
+    repo: str = typer.Option(".", help="Path to the DAM repo"),
+    as_json: bool = typer.Option(False, "--json", help="Machine-readable output (used by the Premiere panel)"),
+) -> None:
     """List all projects found in the repo."""
     repo_path = _repo(repo)
+    # Sync first so lock status reflects the team, not this clone's last pull.
+    try:
+        git_ops.fetch(repo_path)
+        git_ops.pull_ff_only(repo_path)
+    except OpenDamError:
+        if as_json:
+            typer.echo("warning: could not sync with remote — showing local state", err=True)
+        else:
+            console.print("[yellow]Warning:[/yellow] could not sync with remote — showing local state.")
+    if as_json:
+        me = locking.current_identity(repo_path)["user"]
+        payload = []
+        for p in projects_mod.discover(repo_path):
+            locked = bool(p.lock and p.lock.is_locked())
+            payload.append({
+                "name": p.name,
+                "path": str(p.path),
+                "rel_path": str(p.path.relative_to(repo_path)),
+                "status": "locked" if locked else "unlocked",
+                "locked_by": p.lock.locked_by.get("user") if locked else None,
+                "locked_at": p.lock.locked_at if locked else None,
+                "mine": locked and p.lock.is_held_by(me),
+            })
+        typer.echo(json.dumps({"projects": payload}))
+        return
     table = Table("Project", "Status", "Locked by", "Since")
     for p in projects_mod.discover(repo_path):
         if p.lock and p.lock.is_locked():
@@ -355,6 +394,10 @@ def checkin(
     message: Optional[str] = typer.Option(None, "-m", "--message"),
     force_checkin: bool = typer.Option(False, "--force-checkin"),
     keep_lock: bool = typer.Option(False, "--keep-lock"),
+    yes: bool = typer.Option(
+        False, "--yes", "-y",
+        help="Skip the saved-and-closed confirmation (for callers that already handled it, like the Premiere panel)",
+    ),
 ) -> None:
     """Commit + push project changes and release the lock."""
     repo_path = _repo(repo)
@@ -372,13 +415,14 @@ def checkin(
         )
         return
 
-    launcher = get_launcher()
-    still_open_hint = ""
-    if launcher.is_running():
-        still_open_hint = " (Premiere still appears to be running — have you saved?)"
-    if not typer.confirm(f"Have you saved and closed the project in Premiere?{still_open_hint}"):
-        console.print("Aborted — nothing committed.")
-        return
+    if not yes:
+        launcher = get_launcher()
+        still_open_hint = ""
+        if launcher.is_running():
+            still_open_hint = " (Premiere still appears to be running — have you saved?)"
+        if not typer.confirm(f"Have you saved and closed the project in Premiere?{still_open_hint}"):
+            console.print("Aborted — nothing committed.")
+            return
 
     dirty = git_ops.status_porcelain(repo_path, [str(info.path)])
     to_add = [str(info.path)]

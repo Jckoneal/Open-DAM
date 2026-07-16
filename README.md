@@ -22,6 +22,12 @@ files and their lock metadata.
 > library step by step, and has a section for the team lead creating one from
 > scratch. This README is the technical reference.
 
+There's also a **[Premiere Pro panel](docs/premiere-panel.md)** (Window →
+Extensions → Open-DAM) that puts checkout/check-in buttons inside Premiere
+itself — and because it runs in-app, its Check In saves and closes the project
+automatically before pushing. Install with
+`./scripts/install-premiere-panel.sh`.
+
 ## How locking works
 
 Each project has a sibling lock file committed alongside it on `main`:
@@ -120,10 +126,10 @@ dam release MyShow_Ep01 --force
 | `dam clone <remote-url>` | Clone the DAM repo and set up local config |
 | `dam new <name>` | Create a new project (from template, or via a blank Premiere launch), register it, claim the lock (`--no-launch`) |
 | `dam import <source> [name]` | Register an existing `.prproj` (`--move`, `--checkout`) |
-| `dam list` | Table of all projects: name, lock status, holder, since |
+| `dam list` | Table of all projects: name, lock status, holder, since (`--json` for machines) |
 | `dam status [<project>]` | Detailed lock + local working-tree status |
 | `dam checkout <project>` | Pull, claim the lock, launch Premiere (`--no-launch`, `--force`) |
-| `dam checkin <project>` | Commit, push, release the lock (`-m`, `--force-checkin`, `--keep-lock`) |
+| `dam checkin <project>` | Commit, push, release the lock (`-m`, `--force-checkin`, `--keep-lock`, `--yes`) |
 | `dam release <project>` | Release the lock without committing (`--force`, `--discard-local`) |
 | `dam config get/set` | Read/write `.damconfig.yaml` values |
 | `dam doctor` | Diagnostics: git, remote, Premiere path, media root |

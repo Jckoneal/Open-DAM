@@ -1,0 +1,101 @@
+/* Matches Premiere's dark UI so the panel doesn't look foreign. */
+body {
+  margin: 0;
+  padding: 8px;
+  background: #232323;
+  color: #d6d6d6;
+  font-family: -apple-system, "Segoe UI", sans-serif;
+  font-size: 12px;
+  user-select: none;
+}
+
+.hidden { display: none; }
+
+h2 { font-size: 13px; margin: 4px 0 10px; }
+
+label { display: block; margin-bottom: 8px; color: #a0a0a0; }
+
+input[type="text"] {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 3px;
+  padding: 5px 6px;
+  background: #1a1a1a;
+  border: 1px solid #444;
+  border-radius: 3px;
+  color: #d6d6d6;
+  font-size: 12px;
+}
+
+button {
+  background: #3a3a3a;
+  border: 1px solid #555;
+  border-radius: 3px;
+  color: #d6d6d6;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+button:hover { background: #4a4a4a; }
+button:disabled { opacity: 0.45; cursor: default; }
+button.primary { background: #2d5c8a; border-color: #3a6ea5; }
+button.primary:hover { background: #366da3; }
+button.danger:hover { background: #7a3333; }
+
+.toolbar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.toolbar #refresh { margin-right: auto; }
+
+#newRow {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+#newRow.hidden { display: none; }
+#newRow input { flex: 1; margin-top: 0; }
+
+.project {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 6px;
+  border-bottom: 1px solid #333;
+}
+.project .name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.project .who {
+  color: #909090;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40%;
+}
+
+.badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+.badge.free   { background: #2e4d2e; color: #9fdc9f; }
+.badge.mine   { background: #2d4a63; color: #9ecbf0; }
+.badge.locked { background: #5c2e2e; color: #e0a0a0; }
+
+#statusLine {
+  margin-top: 8px;
+  min-height: 16px;
+  color: #909090;
+  font-size: 11px;
+  white-space: pre-wrap;
+  user-select: text;
+}
+#statusLine.error, .error { color: #e08080; }
