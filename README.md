@@ -16,6 +16,12 @@ source media pre-populated at the same relative path, so Premiere's relative med
 links resolve identically everywhere — Git only ever tracks the small `.prproj`
 files and their lock metadata.
 
+> **New to this — or setting it up for a team of editors?** Read the
+> **[Getting Started guide](docs/getting-started.md)** instead of this page. It
+> assumes no Git or Terminal experience, walks through joining an existing team
+> library step by step, and has a section for the team lead creating one from
+> scratch. This README is the technical reference.
+
 ## How locking works
 
 Each project has a sibling lock file committed alongside it on `main`:
