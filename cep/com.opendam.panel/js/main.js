@@ -8,6 +8,7 @@
  */
 
 var cp = require("child_process");
+var fs = require("fs");
 
 var REFRESH_MS = 30000;
 var state = { busy: false, projects: [], confirmingRelease: null };
@@ -34,13 +35,55 @@ function saveSettingsValues(repoPath, damPath) {
   localStorage.setItem("odam.damPath", damPath);
 }
 
+function normalizePathInput(raw) {
+  // Users paste paths with shell escapes, quotes, a ~, or (commonly) a
+  // missing leading slash — normalize all of that before validating.
+  var p = (raw || "").trim().replace(/\\ /g, " ").replace(/^['"]+|['"]+$/g, "").trim();
+  if (!p) return "";
+  if (p[0] === "~") p = (process.env.HOME || "") + p.slice(1);
+  if (p[0] !== "/" && fs.existsSync("/" + p)) p = "/" + p;
+  return p;
+}
+
 function detectDamPath() {
-  // A login shell so the user's normal PATH (pipx, venv shims, etc.) applies.
+  // -i so .zshrc is read too: conda/pyenv put their PATH setup there, and a
+  // plain login shell (-l) misses it, which made auto-detect silently fail.
   return new Promise(function (resolve) {
-    cp.exec("/bin/zsh -lc 'command -v dam'", function (err, stdout) {
-      resolve(err ? "" : stdout.trim());
-    });
+    cp.exec(
+      "/bin/zsh -ilc 'command -v dam' 2>/dev/null",
+      { timeout: 8000 },
+      function (err, stdout) {
+        var lines = (stdout || "").trim().split("\n").filter(Boolean);
+        var found = lines.length ? lines[lines.length - 1] : "";
+        if (found && fs.existsSync(found)) return resolve(found);
+        var candidates = [
+          (process.env.HOME || "") + "/.local/bin/dam",
+          "/opt/homebrew/bin/dam",
+          "/opt/homebrew/Caskroom/miniconda/base/bin/dam",
+          "/usr/local/bin/dam",
+        ];
+        for (var i = 0; i < candidates.length; i++) {
+          if (fs.existsSync(candidates[i])) return resolve(candidates[i]);
+        }
+        resolve("");
+      }
+    );
   });
+}
+
+function validateSettings(repoPath, damPath) {
+  if (!repoPath) return "Enter your project library folder (the cloned team repo).";
+  if (!fs.existsSync(repoPath)) return "Library folder not found: " + repoPath;
+  if (!fs.existsSync(repoPath + "/.git")) {
+    return repoPath + " isn't a project library (no .git inside). It should be the folder you got from 'dam clone'.";
+  }
+  if (damPath) {
+    if (!fs.existsSync(damPath)) return "dam not found at: " + damPath;
+    if (fs.statSync(damPath).isDirectory()) {
+      return "That's a folder, not the dam program itself. It's usually .../bin/dam — or leave the field blank to auto-detect.";
+    }
+  }
+  return "";
 }
 
 /* ---------- running dam ---------- */
@@ -56,7 +99,13 @@ function runDam(args) {
       { timeout: 120000 },
       function (err, stdout, stderr) {
         if (err) {
-          reject(new Error((stdout || "") + (stderr || "") || err.message));
+          var detail = ((stdout || "") + (stderr || "")).trim();
+          if (!detail && err.code === "EACCES") {
+            detail = "the configured dam path isn't an executable program (" + s.damPath + ") — check Settings";
+          } else if (!detail && err.code === "ENOENT") {
+            detail = "dam not found at " + s.damPath + " — check Settings";
+          }
+          reject(new Error(detail || err.message));
         } else {
           resolve(stdout);
         }
@@ -271,8 +320,26 @@ document.addEventListener("DOMContentLoaded", function () {
   });
   el("settings").addEventListener("click", function () { showSetup(""); });
   el("saveSettings").addEventListener("click", function () {
-    saveSettingsValues(el("repoPath").value.trim(), el("damPath").value.trim());
-    refresh(false);
+    var repoPath = normalizePathInput(el("repoPath").value);
+    var damPath = normalizePathInput(el("damPath").value);
+
+    var err = validateSettings(repoPath, damPath);
+    if (err) {
+      el("setupError").textContent = err;
+      return;
+    }
+    var resolveDam = damPath ? Promise.resolve(damPath) : detectDamPath();
+    resolveDam.then(function (dp) {
+      if (!dp) {
+        el("setupError").textContent =
+          "Couldn't find the dam command automatically. In Terminal, run " +
+          "'command -v dam' and paste the result here.";
+        return;
+      }
+      saveSettingsValues(repoPath, dp);
+      el("setupError").textContent = "";
+      refresh(false);
+    });
   });
 
   var s = getSettings();

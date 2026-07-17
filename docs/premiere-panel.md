@@ -77,8 +77,16 @@ it. Premiere-side actions go through four small ExtendScript functions in
 
 Known limitations:
 
+- **A project must be open before the panel can open.** Premiere's
+  Window → Extensions menu (like most of its workspace) is unavailable from the
+  home screen. Practical pattern: keep a tiny always-available "Dashboard"
+  project (even an empty .prproj outside the library) to open first; once the
+  panel is in your workspace it stays there as you check projects out and in.
 - **CEP, not UXP.** Adobe is migrating extensions to UXP; CEP still works in
-  current Premiere releases, but a UXP port will eventually be needed.
+  current Premiere releases, but a UXP port will eventually be needed. Note a
+  UXP port is not a quick swap: UXP plugins can't spawn external processes, so
+  the panel couldn't shell out to `dam` — it would need a small local service
+  (e.g. `dam serve`) that the plugin talks to over localhost instead.
 - **Unsigned** — needs PlayerDebugMode (the install script handles it).
 - **New… requires a template.** Without a `template_path`, creating projects
   still needs the CLI flow (`dam new` in Terminal), which walks you through
