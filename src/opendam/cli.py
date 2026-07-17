@@ -127,11 +127,19 @@ def init(repo: str = typer.Option(".", help="Path to the DAM git repo")) -> None
 
 def _ensure_gitignored(repo_path: Path) -> None:
     gi = repo_path / ".gitignore"
-    entry = config_mod.CONFIG_FILENAME
+    entries = [
+        config_mod.CONFIG_FILENAME,          # per-machine config
+        "Adobe Premiere Pro Auto-Save*/",    # Premiere drops auto-saves next to the project
+        "Adobe Premiere Pro Audio Previews*/",
+        "Adobe Premiere Pro Video Previews*/",
+        ".DS_Store",
+    ]
     existing = gi.read_text() if gi.exists() else ""
-    if entry not in existing.splitlines():
+    lines = existing.splitlines()
+    missing = [e for e in entries if e not in lines]
+    if missing:
         with gi.open("a") as f:
-            f.write(f"\n{entry}\n")
+            f.write("\n" + "\n".join(missing) + "\n")
 
 
 @app.command()
