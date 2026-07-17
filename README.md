@@ -104,6 +104,20 @@ dam checkin MyShow_Ep01 --keep-lock   # push your progress, keep the lock
 dam release MyShow_Ep01               # or give up the lock with no commit
 ```
 
+**Leaving notes / tickets** (no checkout needed — anyone can flag work on any
+project; open tickets are shown automatically at checkout):
+
+```bash
+dam ticket add MyShow_Ep01 "Fix audio sync at 02:14"
+dam ticket list MyShow_Ep01
+dam ticket done MyShow_Ep01 a3f2
+dam checkin MyShow_Ep01 --note "rough cut done, needs color"   # note + checkin in one commit
+```
+
+Tickets are stored like locks are: small JSON files committed in the repo, one
+file per ticket (`Ep01.prproj.tickets/<id>.json`), so concurrent adds from
+different editors can never conflict.
+
 **Recovering a stale lock** (someone force-quit without checking in — never done
 automatically, always a deliberate human action):
 
@@ -123,8 +137,11 @@ dam release MyShow_Ep01 --force
 | `dam list` | Table of all projects: name, lock status, holder, since |
 | `dam status [<project>]` | Detailed lock + local working-tree status |
 | `dam checkout <project>` | Pull, claim the lock, launch Premiere (`--no-launch`, `--force`) |
-| `dam checkin <project>` | Commit, push, release the lock (`-m`, `--force-checkin`, `--keep-lock`) |
+| `dam checkin <project>` | Commit, push, release the lock (`-m`, `--force-checkin`, `--keep-lock`, `--note "text"`) |
 | `dam release <project>` | Release the lock without committing (`--force`, `--discard-local`) |
+| `dam ticket add <project> "text"` | Attach a note/ticket to a project — no lock needed |
+| `dam ticket list <project>` | Show a project's tickets (`--open` to hide done ones) |
+| `dam ticket done <project> <id>` | Mark a ticket done (id prefix from `ticket list`) |
 | `dam config get/set` | Read/write `.damconfig.yaml` values |
 | `dam doctor` | Diagnostics: git, remote, Premiere path, media root |
 

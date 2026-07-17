@@ -181,6 +181,31 @@ opened in Premiere, already checked out to you. If not, a blank Premiere opens
 and the tool tells you exactly where to save your new project — save it there,
 come back to Terminal, and confirm.
 
+### Leaving notes for each other
+
+Every project has a to-do list attached — the tool calls them tickets. **You
+don't need to check a project out to add one**, so a producer or another editor
+can flag work on a project any time:
+
+```
+dam ticket add Ep01 "Fix audio sync at 02:14"
+```
+
+Whoever checks Ep01 out next sees the open tickets right in their Terminal,
+before Premiere even opens. To see or close them:
+
+```
+dam ticket list Ep01           # every ticket, open and done
+dam ticket done Ep01 a3f2      # mark one done (use the id from the list)
+```
+
+And when you finish a session, you can leave a note for the next editor as part
+of checking in:
+
+```
+dam checkin Ep01 --note "rough cut done, still needs color"
+```
+
 ### Adding a project that already exists (from before your team used Open-DAM)
 
 ```
@@ -311,4 +336,8 @@ dam new <project>                 brand-new project
 dam import <file>                 bring an existing .prproj into the library
 dam status <project>              details on one project
 dam doctor                        is everything set up right?
+dam ticket add <project> "note"   flag work on a project (no checkout needed)
+dam ticket list <project>         see a project's to-do list
+dam ticket done <project> <id>    mark a to-do done
+dam checkin <project> --note "…"  check in + leave a note for the next editor
 ```
