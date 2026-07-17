@@ -13,6 +13,7 @@ from opendam import config as config_mod
 from opendam import git_ops
 from opendam import locking
 from opendam import projects as projects_mod
+from opendam import tickets as tickets_mod
 from opendam.errors import (
     DirtyWorkingTreeError,
     LockHeldError,
@@ -127,11 +128,19 @@ def init(repo: str = typer.Option(".", help="Path to the DAM git repo")) -> None
 
 def _ensure_gitignored(repo_path: Path) -> None:
     gi = repo_path / ".gitignore"
-    entry = config_mod.CONFIG_FILENAME
+    entries = [
+        config_mod.CONFIG_FILENAME,          # per-machine config
+        "Adobe Premiere Pro Auto-Save*/",    # Premiere drops auto-saves next to the project
+        "Adobe Premiere Pro Audio Previews*/",
+        "Adobe Premiere Pro Video Previews*/",
+        ".DS_Store",
+    ]
     existing = gi.read_text() if gi.exists() else ""
-    if entry not in existing.splitlines():
+    lines = existing.splitlines()
+    missing = [e for e in entries if e not in lines]
+    if missing:
         with gi.open("a") as f:
-            f.write(f"\n{entry}\n")
+            f.write("\n" + "\n".join(missing) + "\n")
 
 
 @app.command()
@@ -163,15 +172,27 @@ def _register_new_project(repo_path: Path, target_path: Path, commit_msg: str) -
     if not result.ok and "nothing to commit" not in result.stdout.lower():
         _fail(f"commit failed: {result.stderr}")
         return
-    git_ops.fetch(repo_path)
-    git_ops.pull_ff_only(repo_path)
+    # No pull here: with a local commit already made, `pull --ff-only` can
+    # never fast-forward if the remote advanced meanwhile (e.g. someone
+    # added a ticket). _push_with_retry integrates via rebase on rejection.
     _push_with_retry(repo_path)
+
+
+def _print_open_tickets(target_path: Path) -> None:
+    open_list = tickets_mod.open_tickets(target_path)
+    if not open_list:
+        return
+    console.print(f"[bold]To do on this project ({len(open_list)} open):[/bold]")
+    for t in open_list:
+        # \[ = literal bracket; rich would otherwise eat [a3f2c9d1] as a markup tag
+        console.print(f"  \\[{t.id}] {t.text}  [dim]— {t.created_by.get('user')}, {t.created_at}[/dim]")
 
 
 def _claim_and_launch(repo_path: Path, target_path: Path, cfg: "config_mod.Config", no_launch: bool) -> None:
     lock = locking.claim_lock(repo_path, target_path)
     console.print(f"[green]Checked out {target_path.stem}[/green] — locked by you as of {lock.locked_at}.")
     console.print(f"Run 'dam checkin {target_path.stem}' when done.")
+    _print_open_tickets(target_path)
     if no_launch:
         return
     launcher = get_launcher()
@@ -300,17 +321,20 @@ def list_projects(
                 "locked_by": p.lock.locked_by.get("user") if locked else None,
                 "locked_at": p.lock.locked_at if locked else None,
                 "mine": locked and p.lock.is_held_by(me),
+                "open_tickets": len(tickets_mod.open_tickets(p.path)),
             })
         typer.echo(json.dumps({"projects": payload}))
         return
-    table = Table("Project", "Status", "Locked by", "Since")
+    table = Table("Project", "Status", "Locked by", "Since", "Todo")
     for p in projects_mod.discover(repo_path):
+        todo = len(tickets_mod.open_tickets(p.path))
+        todo_cell = f"[yellow]{todo}[/yellow]" if todo else ""
         if p.lock and p.lock.is_locked():
             holder = p.lock.locked_by.get("user", "?")
             since = p.lock.locked_at or "?"
-            table.add_row(p.name, "[red]locked[/red]", holder, since)
+            table.add_row(p.name, "[red]locked[/red]", holder, since, todo_cell)
         else:
-            table.add_row(p.name, "[green]unlocked[/green]", "-", "-")
+            table.add_row(p.name, "[green]unlocked[/green]", "-", "-", todo_cell)
     console.print(table)
 
 
@@ -339,6 +363,7 @@ def status(
         console.print("  status:    [green]unlocked[/green]")
     dirty = git_ops.status_porcelain(repo_path, [str(info.path)])
     console.print(f"  local:     {'dirty' if dirty else 'clean'}")
+    _print_open_tickets(info.path)
 
 
 @app.command()
@@ -398,6 +423,9 @@ def checkin(
         False, "--yes", "-y",
         help="Skip the saved-and-closed confirmation (for callers that already handled it, like the Premiere panel)",
     ),
+    note: Optional[str] = typer.Option(
+        None, "--note", help="Leave a ticket for the next editor, committed with this checkin"
+    ),
 ) -> None:
     """Commit + push project changes and release the lock."""
     repo_path = _repo(repo)
@@ -429,25 +457,31 @@ def checkin(
     if dirty:
         git_ops.add(repo_path, to_add)
 
+    new_ticket = None
+    if note:
+        new_ticket = tickets_mod.create(info.path, note.strip(), identity)
+        git_ops.add(repo_path, [str(tickets_mod.ticket_path(info.path, new_ticket.id))])
+
     if not keep_lock:
         released = locking.release_lock(repo_path, info.path, identity)
         git_ops.add(repo_path, [str(locking.lock_path_for(info.path))])
 
     commit_msg = message or f"checkin: {info.name} by {identity['user']}"
-    if dirty or not keep_lock:
+    if dirty or not keep_lock or new_ticket:
         result = git_ops.commit(repo_path, commit_msg)
         if not result.ok and "nothing to commit" not in result.stdout.lower():
             _fail(f"commit failed: {result.stderr}")
             return
 
-    git_ops.fetch(repo_path)
-    git_ops.pull_ff_only(repo_path)
+    # No pull before pushing — see _register_new_project for why.
     _push_with_retry(repo_path)
 
     if keep_lock:
         console.print(f"[green]Checked in {info.name}[/green] — lock retained.")
     else:
         console.print(f"[green]Checked in {info.name}[/green] and released the lock.")
+    if new_ticket:
+        console.print(f"Left ticket \\[{new_ticket.id}] for the next editor: {new_ticket.text}")
 
 
 @app.command()
@@ -493,10 +527,111 @@ def release(
         else f"release: {info.name} by {identity['user']}"
     )
     git_ops.commit(repo_path, msg)
-    git_ops.fetch(repo_path)
-    git_ops.pull_ff_only(repo_path)
+    # No pull before pushing — see _register_new_project for why.
     _push_with_retry(repo_path)
     console.print(f"[green]Released {info.name}[/green].")
+
+
+ticket_app = typer.Typer(help="Notes/tickets on a project — add one without needing the lock.")
+app.add_typer(ticket_app, name="ticket")
+
+
+def _find_project(repo_path: Path, project: str) -> "projects_mod.ProjectInfo":
+    try:
+        return projects_mod.find(repo_path, project)
+    except ProjectNotFoundError as e:
+        _fail(str(e))
+        raise  # unreachable — _fail exits
+
+
+@ticket_app.command("add")
+def ticket_add(
+    project: str,
+    text: str,
+    repo: str = typer.Option(".", help="Path to the DAM repo"),
+) -> None:
+    """Add a ticket to a project. No checkout/lock needed."""
+    repo_path = _repo(repo)
+    info = _find_project(repo_path, project)
+
+    git_ops.fetch(repo_path)
+    git_ops.pull_ff_only(repo_path)
+
+    identity = locking.current_identity(repo_path)
+    ticket = tickets_mod.create(info.path, text.strip(), identity)
+    git_ops.add(repo_path, [str(tickets_mod.ticket_path(info.path, ticket.id))])
+    result = git_ops.commit(repo_path, f"ticket: add {ticket.id} to {info.name} by {identity['user']}")
+    if not result.ok:
+        _fail(f"commit failed: {result.stderr}")
+        return
+    _push_with_retry(repo_path)
+    console.print(f"[green]Added ticket \\[{ticket.id}][/green] to {info.name}: {ticket.text}")
+
+
+@ticket_app.command("list")
+def ticket_list(
+    project: str,
+    repo: str = typer.Option(".", help="Path to the DAM repo"),
+    open_only: bool = typer.Option(False, "--open", help="Show only open tickets"),
+) -> None:
+    """List tickets on a project."""
+    repo_path = _repo(repo)
+    info = _find_project(repo_path, project)
+
+    try:
+        git_ops.fetch(repo_path)
+        git_ops.pull_ff_only(repo_path)
+    except OpenDamError:
+        console.print("[yellow]Warning:[/yellow] could not sync with remote — showing local state.")
+
+    all_tickets = tickets_mod.load_all(info.path)
+    if open_only:
+        all_tickets = [t for t in all_tickets if t.is_open()]
+    if not all_tickets:
+        console.print(f"No {'open ' if open_only else ''}tickets on {info.name}.")
+        return
+
+    table = Table("Id", "Status", "Note", "By", "Created")
+    for t in all_tickets:
+        status_cell = "[yellow]open[/yellow]" if t.is_open() else "[green]done[/green]"
+        by = t.created_by.get("user", "?")
+        if not t.is_open() and t.done_by:
+            by += f" [dim](closed by {t.done_by.get('user')})[/dim]"
+        table.add_row(t.id, status_cell, t.text, by, t.created_at or "?")
+    console.print(table)
+
+
+@ticket_app.command("done")
+def ticket_done(
+    project: str,
+    ticket_id: str = typer.Argument(..., help="Ticket id (or unambiguous prefix) from 'dam ticket list'"),
+    repo: str = typer.Option(".", help="Path to the DAM repo"),
+) -> None:
+    """Mark a ticket as done."""
+    repo_path = _repo(repo)
+    info = _find_project(repo_path, project)
+
+    git_ops.fetch(repo_path)
+    git_ops.pull_ff_only(repo_path)
+
+    try:
+        ticket = tickets_mod.find_by_prefix(info.path, ticket_id)
+    except tickets_mod.TicketNotFoundError as e:
+        _fail(str(e))
+        return
+    if not ticket.is_open():
+        console.print(f"Ticket \\[{ticket.id}] is already done.")
+        return
+
+    identity = locking.current_identity(repo_path)
+    tickets_mod.mark_done(info.path, ticket, identity)
+    git_ops.add(repo_path, [str(tickets_mod.ticket_path(info.path, ticket.id))])
+    result = git_ops.commit(repo_path, f"ticket: done {ticket.id} on {info.name} by {identity['user']}")
+    if not result.ok:
+        _fail(f"commit failed: {result.stderr}")
+        return
+    _push_with_retry(repo_path)
+    console.print(f"[green]Closed ticket \\[{ticket.id}][/green]: {ticket.text}")
 
 
 config_app = typer.Typer(help="Get/set values in .damconfig.yaml")

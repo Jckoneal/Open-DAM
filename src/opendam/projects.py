@@ -2,12 +2,30 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 from opendam.errors import ProjectNotFoundError
 from opendam.locking import Lock, lock_path_for
+
+AUTOSAVE_DIR_PREFIX = "Adobe Premiere Pro Auto-Save"
+
+# Premiere's auto-save/rescue copies: "<Name>--<uuid>-<YYYY-MM-DD_HH-MM-SS>.prproj"
+_PREMIERE_COPY_RE = re.compile(
+    r"--[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+    r"-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$"
+)
+
+
+def is_premiere_artifact(repo: Path, prproj: Path) -> bool:
+    """True for files Premiere generates on its own (auto-saves, rescue
+    copies) rather than projects anyone deliberately created — these must
+    never show up in dam list or be lockable."""
+    if any(part.startswith(AUTOSAVE_DIR_PREFIX) for part in prproj.relative_to(repo).parts[:-1]):
+        return True
+    return bool(_PREMIERE_COPY_RE.search(prproj.stem))
 
 
 @dataclass
@@ -20,6 +38,8 @@ class ProjectInfo:
 def discover(repo: Path) -> list[ProjectInfo]:
     projects = []
     for prproj in sorted(repo.rglob("*.prproj")):
+        if is_premiere_artifact(repo, prproj):
+            continue
         lpath = lock_path_for(prproj)
         lock = Lock.load(lpath) if lpath.exists() else None
         projects.append(ProjectInfo(name=prproj.stem, path=prproj, lock=lock))
