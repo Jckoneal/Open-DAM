@@ -152,3 +152,46 @@ def freed_by_others(old_entries: list[ProjectEntry], new_entries: list[ProjectEn
     was_locked_by_other = {e.name for e in old_entries if e.status == "locked"}
     now_available = {e.name for e in new_entries if e.status == "available"}
     return sorted(was_locked_by_other & now_available)
+
+
+@dataclass
+class PaletteAction:
+    """One runnable action on a project, as offered by the search/command
+    palette (wireframe option 1c, "search-first · keyboard command
+    palette") — verbs first, not rows."""
+    verb: str  # "Check out" | "Check in" | "Add note"
+    project: str
+    entry: ProjectEntry
+
+    @property
+    def label(self) -> str:
+        return f"{self.verb} — {self.project}"
+
+
+def palette_actions(entries: list[ProjectEntry]) -> list[PaletteAction]:
+    """One or two actionable verbs per project, in palette order: your own
+    checkouts get "Check in" (the most likely next action) plus "Add note";
+    available projects get "Check out"; locked-by-others get "Add note" —
+    the only thing you can do to a project you don't hold, same as clicking
+    it in the menu does."""
+    actions = []
+    for e in entries:
+        if e.status == "mine":
+            actions.append(PaletteAction("Check in", e.name, e))
+            actions.append(PaletteAction("Add note", e.name, e))
+        elif e.status == "available":
+            actions.append(PaletteAction("Check out", e.name, e))
+        else:  # locked by someone else
+            actions.append(PaletteAction("Add note", e.name, e))
+    return actions
+
+
+def filter_actions(actions: list[PaletteAction], query: str) -> list[PaletteAction]:
+    """Case-insensitive substring match on the project name (not the verb —
+    typing "ep0" should find every action on Ep01, not just ones whose verb
+    happens to contain those letters), preserving palette_actions' relative
+    order. An empty/blank query returns everything unfiltered."""
+    q = query.strip().lower()
+    if not q:
+        return list(actions)
+    return [a for a in actions if q in a.project.lower()]

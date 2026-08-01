@@ -7,7 +7,9 @@ needed for day-to-day use once it's set up.
 
 ```
 🎬  ▾                                (menu bar icon — plain template glyph;
- ├ CHECKED OUT BY YOU                 color only ever appears in the menu)
+ ├ Search…                     ⌘⇧C    color only ever appears in the menu)
+ ├ ─────────────
+ ├ CHECKED OUT BY YOU
  ├ ● Ep01_RoughCut — 2h 14m
  │   ├ Check In…
  │   └ Release
@@ -70,6 +72,16 @@ rm ~/Library/LaunchAgents/com.collaborate.menubar.plist
 
 ## Using it
 
+**Search…** (⌘⇧C from anywhere*, or click the menu item) — a floating,
+keyboard-driven palette: type part of a project name to filter, ↑/↓ to move
+the selection, Enter to run the top (or selected) action, Escape to dismiss.
+Every project offers one or two verbs — **Check out**, **Check in**, or **Add
+note** — so it's the fastest way to act on a project by name without
+clicking through the menu. \*The global shortcut needs Accessibility/Input
+Monitoring permission granted to whatever's actually running this (System
+Settings → Privacy & Security) — see the limitations below. The **Search…**
+menu item always works regardless of that permission.
+
 **Checked out by you** — surfaces at the top whenever you hold a lock, with
 elapsed time and a stale warning (⚠) if you've held it past
 `stale_lock_hours`. Click for a submenu:
@@ -121,6 +133,17 @@ macOS template image sourced from the project's Claude Design workspace, not
 an emoji — template images get free light/dark-menu-bar and click-highlight
 adaptation from AppKit that a plain title glyph doesn't.
 
+The search palette (`src/collaborate/menubar_palette.py`) is the one piece of
+real custom AppKit UI in the app — rumps only offers blocking modal dialogs,
+with no live-filter-as-you-type primitive, so there was no way to build this
+on top of rumps itself. All its filtering/ranking logic
+(`palette_actions`/`filter_actions` in `menubar_model.py`) is plain,
+rumps-free Python; the window class only wires that logic to an
+`NSTextField` + a delegate implementing Cocoa's standard "text field with an
+arrow-key-navigable suggestions list" pattern
+(`control:textView:doCommandBySelector:` — the same mechanism many real Mac
+apps use for this), not a from-scratch keyboard-event reimplementation.
+
 Known limitations:
 
 - **macOS only**, same as the Premiere launcher.
@@ -134,6 +157,17 @@ Known limitations:
   identity (`CFBundleIdentifier`) that a bare script run via the `collab`
   console command structurally can't have, so success/freed-project feedback
   shows as a title-text flash instead.
-- First-run, "Settings…", "New Project…", and "Add Note…" all use a blocking
-  system dialog — needs a real interactive login session (as any menu bar app
+- **The ⌘⇧C global hotkey is best-effort.** `NSEvent`'s *global* event
+  monitor — the only way to catch a hotkey while some other app is
+  frontmost — silently does nothing unless the process running it has
+  Accessibility or Input Monitoring permission (macOS prompts for this the
+  first time it's actually needed, or grant it ahead of time in System
+  Settings → Privacy & Security). Because this runs as a bare script under a
+  shared Python interpreter rather than a signed `.app`, that permission
+  grant is tied to the interpreter's exact path and can need re-granting
+  after a reinstall or a Python upgrade. Registration itself never raises
+  without the permission — it just never fires — which is exactly why the
+  **Search…** menu item exists as a guaranteed-to-work fallback regardless.
+- First-run, "Settings…", "New Project…", "Add Note…", and the search
+  palette all need a real interactive login session (as any menu bar app
   does), so none of it can be driven or verified from a headless script.

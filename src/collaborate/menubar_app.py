@@ -29,7 +29,15 @@ from pathlib import Path
 from typing import Optional
 
 import rumps
-from AppKit import NSApplication, NSApplicationActivationPolicyAccessory
+from AppKit import (
+    NSApplication,
+    NSApplicationActivationPolicyAccessory,
+    NSEvent,
+    NSEventMaskKeyDown,
+    NSEventModifierFlagCommand,
+    NSEventModifierFlagDeviceIndependentFlagsMask,
+    NSEventModifierFlagShift,
+)
 from PyObjCTools import AppHelper
 
 from collaborate import config as config_mod
@@ -41,19 +49,28 @@ from collaborate.launcher import get_launcher
 from collaborate.menubar_model import (
     REFRESH_SECONDS,
     AppSettings,
+    PaletteAction,
     ProjectEntry,
     build_entries,
     check_media_root,
     elapsed_label,
     freed_by_others,
     group_entries,
+    palette_actions,
     sync_repo,
 )
+from collaborate.menubar_palette import SearchPalette
 
 # A real macOS template image (see assets/ — sourced from the design project
 # above), not an emoji: template images get free light/dark-menu-bar and
 # click-highlight adaptation from AppKit that a plain title glyph doesn't.
 ICON_PATH = str(Path(__file__).parent / "assets" / "menubar-icon@2x.png")
+
+# Virtual keycode for 'C' on a US keyboard layout — global hotkeys
+# conventionally key off physical key position (keyCode), not the typed
+# character, since that stays stable regardless of modifier state.
+HOTKEY_KEYCODE = 8
+HOTKEY_MODIFIERS = NSEventModifierFlagCommand | NSEventModifierFlagShift
 
 
 def _activate() -> None:
@@ -82,6 +99,8 @@ class OpenDamMenuBarApp(rumps.App):
         self._busy = False
         self._last_entries: Optional[list] = None
         self.refresh_timer = None
+        self._palette = SearchPalette(on_run=self._run_palette_action)
+        self._hotkey_monitor = None
         # rumps.App.run() creates the real NSApp delegate and activates the
         # app — but only once *it* runs, which is after this constructor
         # returns. Doing first-run setup (a dialog needing keyboard focus)
@@ -96,6 +115,7 @@ class OpenDamMenuBarApp(rumps.App):
     def _on_startup(self, sender) -> None:
         sender.stop()
         self._ensure_repo_configured()
+        self._register_global_hotkey()
         self.refresh_timer = rumps.Timer(self.on_timer, REFRESH_SECONDS)
         self.refresh_timer.start()
         self.refresh()
@@ -181,6 +201,9 @@ class OpenDamMenuBarApp(rumps.App):
             self.menu.add(item)
         if warnings:
             self.menu.add(rumps.separator)
+
+        self.menu.add(rumps.MenuItem("Search…", callback=self._open_search_palette, key="f"))
+        self.menu.add(rumps.separator)
 
         mine, others = group_entries(entries)
 
@@ -404,25 +427,82 @@ class OpenDamMenuBarApp(rumps.App):
             )
             if confirmed != 1:
                 return
-            text = self._prompt_text("Add Note", f"Note for {entry.name}:", ok="Add")
-            if not text:
-                return
-
-            def do():
-                identity = locking.current_identity(self.repo_path)
-                ticket = tickets_mod.create(entry.path, text, identity)
-                git_ops.add(self.repo_path, [str(tickets_mod.ticket_path(entry.path, ticket.id))])
-                result = git_ops.commit(
-                    self.repo_path, f"ticket: add {ticket.id} to {entry.name} by {identity['user']}"
-                )
-                if not result.ok and "nothing to commit" not in result.stdout.lower():
-                    raise OpenDamError(f"commit failed: {result.stderr}")
-                git_ops.push_with_retry(self.repo_path)
-                return ("notify", "Collaborate", entry.name, "Note added.")
-
-            self._run_async(do)
+            self._prompt_and_add_note(entry)
 
         return handler
+
+    def _prompt_and_add_note(self, entry: ProjectEntry) -> None:
+        """Shared by the locked-project menu click (which confirms via an
+        alert first) and the search palette's "Add note" action (whose
+        intent is already explicit from having searched and selected it,
+        so it skips straight here)."""
+        text = self._prompt_text("Add Note", f"Note for {entry.name}:", ok="Add")
+        if not text:
+            return
+
+        def do():
+            identity = locking.current_identity(self.repo_path)
+            ticket = tickets_mod.create(entry.path, text, identity)
+            git_ops.add(self.repo_path, [str(tickets_mod.ticket_path(entry.path, ticket.id))])
+            result = git_ops.commit(
+                self.repo_path, f"ticket: add {ticket.id} to {entry.name} by {identity['user']}"
+            )
+            if not result.ok and "nothing to commit" not in result.stdout.lower():
+                raise OpenDamError(f"commit failed: {result.stderr}")
+            git_ops.push_with_retry(self.repo_path)
+            return ("notify", "Collaborate", entry.name, "Note added.")
+
+        self._run_async(do)
+
+    # ---------- search / command palette ----------
+
+    def _open_search_palette(self, _sender=None) -> None:
+        if not self.repo_path:
+            return
+        _activate()
+        # Reuse the last refresh's snapshot for instant opening rather than
+        # doing a fresh sync — the palette is meant to be instantaneous;
+        # whichever action gets run does its own fresh git work regardless.
+        entries = self._last_entries
+        if entries is None:
+            entries = build_entries(self.repo_path, config_mod.Config.load(self.repo_path).stale_lock_hours)
+        self._palette.show(palette_actions(entries))
+
+    def _run_palette_action(self, action: PaletteAction) -> None:
+        if action.verb == "Check out":
+            self._make_checkout(action.entry)(None)
+        elif action.verb == "Check in":
+            self._make_checkin(action.entry)(None)
+        elif action.verb == "Add note":
+            self._prompt_and_add_note(action.entry)
+
+    @staticmethod
+    def _is_hotkey_event(event) -> bool:
+        """Matching logic pulled out of the NSEvent monitor's closure so it
+        can be exercised directly in a test against a plain fake object
+        (anything with .keyCode()/.modifierFlags()) — real NSEvents aren't
+        something a test can synthesize."""
+        flags = event.modifierFlags() & NSEventModifierFlagDeviceIndependentFlagsMask
+        return event.keyCode() == HOTKEY_KEYCODE and flags == HOTKEY_MODIFIERS
+
+    def _register_global_hotkey(self) -> None:
+        """Best-effort: ⌘⇧C opens the palette from anywhere, matching the
+        wireframe. NSEvent's *global* monitor needs Accessibility/Input
+        Monitoring permission granted (System Settings -> Privacy &
+        Security) to the process actually running this — for a bare
+        script under a shared interpreter (not a signed .app), that grant
+        is tied to that interpreter's path and can be awkward to keep
+        across reinstalls. Registration itself never fails without the
+        permission; the handler just silently never fires — the "Search…"
+        menu item (key="f") always works regardless, as a guaranteed
+        fallback."""
+        def handler(event):
+            if self._is_hotkey_event(event):
+                self._open_search_palette()
+
+        self._hotkey_monitor = NSEvent.addGlobalMonitorForEventsMatchingMask_handler_(
+            NSEventMaskKeyDown, handler
+        )
 
     def _make_new_project(self):
         def handler(_sender):

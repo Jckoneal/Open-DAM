@@ -133,3 +133,49 @@ def test_check_media_root(tmp_path):
     warning = mb.check_media_root(missing)
     assert warning is not None
     assert missing in warning
+
+
+def test_palette_actions_available_and_locked(alice, bob):
+    runner.invoke(app, ["checkout", "MyProject", "--repo", str(alice), "--no-launch"])
+    mine_actions = mb.palette_actions(mb.build_entries(alice))
+    assert [(a.verb, a.project) for a in mine_actions] == [
+        ("Check in", "MyProject"),
+        ("Add note", "MyProject"),
+    ]
+    assert mine_actions[0].label == "Check in — MyProject"
+
+    mb.sync_repo(bob)
+    theirs_actions = mb.palette_actions(mb.build_entries(bob))
+    assert [(a.verb, a.project) for a in theirs_actions] == [("Add note", "MyProject")]
+
+
+def test_palette_actions_available_project():
+    entry = mb.ProjectEntry("Ep02", Path("Ep02.prproj"), "available", None, None, 0, False)
+    actions = mb.palette_actions([entry])
+    assert [(a.verb, a.project) for a in actions] == [("Check out", "Ep02")]
+
+
+def test_filter_actions_matches_project_name_case_insensitively():
+    actions = mb.palette_actions([
+        mb.ProjectEntry("Ep01_RoughCut", Path("a"), "mine", None, _iso(5), 0, False),
+        mb.ProjectEntry("Ep02_Assembly", Path("b"), "available", None, None, 0, False),
+        mb.ProjectEntry("Brand_Sizzle", Path("c"), "available", None, None, 0, False),
+    ])
+
+    assert [a.project for a in mb.filter_actions(actions, "")] == [
+        "Ep01_RoughCut", "Ep01_RoughCut", "Ep02_Assembly", "Brand_Sizzle",
+    ]
+    assert [a.project for a in mb.filter_actions(actions, "ep0")] == [
+        "Ep01_RoughCut", "Ep01_RoughCut", "Ep02_Assembly",
+    ]
+    assert [a.project for a in mb.filter_actions(actions, "SIZZLE")] == ["Brand_Sizzle"]
+    assert mb.filter_actions(actions, "nonexistent") == []
+
+
+def test_filter_actions_does_not_match_on_verb_text():
+    # "check" appears in every verb — must not match every action just
+    # because it typed the wrong thing into the project-name filter
+    actions = mb.palette_actions([
+        mb.ProjectEntry("Ep01", Path("a"), "mine", None, _iso(5), 0, False),
+    ])
+    assert mb.filter_actions(actions, "check") == []

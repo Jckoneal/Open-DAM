@@ -356,3 +356,145 @@ def test_refresh_flashes_title_when_someone_else_frees_a_project(alice, bob):
     app.refresh()  # second refresh: alice's checkin should now show as freed
     assert "MyProject" in app.title
     assert "✓" in app.title
+
+
+def test_run_palette_action_checkout(alice, monkeypatch):
+    from collaborate.menubar_model import PaletteAction
+
+    monkeypatch.setattr(menubar_app, "get_launcher", lambda: _FakeSuccessfulLauncher())
+
+    app = menubar_app.OpenDamMenuBarApp()
+    app.settings = AppSettings(repo_path=str(alice))
+    captured = []
+    monkeypatch.setattr(app, "_run_async", lambda fn: captured.append(fn()))
+
+    entry = build_entries(alice)[0]
+    app._run_palette_action(PaletteAction("Check out", entry.name, entry))
+
+    result = captured[0]
+    assert result[0] == "notify"
+    assert result[1:3] == ("Collaborate", "MyProject")
+    lock = locking.Lock.load(locking.lock_path_for(entry.path))
+    assert lock.is_held_by("alice@example.com")
+
+
+def test_run_palette_action_checkin(alice, monkeypatch):
+    from collaborate.menubar_model import PaletteAction
+
+    runner.invoke(cli_app, ["checkout", "MyProject", "--repo", str(alice), "--no-launch"])
+    entry = build_entries(alice)[0]
+
+    monkeypatch.setattr(menubar_app.rumps, "alert", lambda *a, **kw: 1)
+    monkeypatch.setattr(menubar_app.rumps, "Window", lambda **kw: _FakeWindow(clicked=1, text=""))
+
+    app = menubar_app.OpenDamMenuBarApp()
+    app.settings = AppSettings(repo_path=str(alice))
+    captured = []
+    monkeypatch.setattr(app, "_run_async", lambda fn: captured.append(fn()))
+    app._run_palette_action(PaletteAction("Check in", entry.name, entry))
+
+    result = captured[0]
+    assert "released" in result[3].lower()
+
+
+def test_run_palette_action_add_note_skips_the_confirming_alert(alice, bob, monkeypatch):
+    """The palette's "Add note" already expresses explicit intent (you
+    searched for and selected it) — unlike the locked-project menu click,
+    it must go straight to the text prompt, not show the "locked by X...
+    Add Note/OK" alert first."""
+    from collaborate.menubar_model import PaletteAction
+
+    runner.invoke(cli_app, ["checkout", "MyProject", "--repo", str(alice), "--no-launch"])
+    sync_repo(bob)
+    entry = build_entries(bob)[0]
+
+    def _must_not_be_called(*_a, **_kw):
+        raise AssertionError("Add note from the palette must not show the confirming alert")
+
+    monkeypatch.setattr(menubar_app.rumps, "alert", _must_not_be_called)
+
+    app = menubar_app.OpenDamMenuBarApp()
+    app.settings = AppSettings(repo_path=str(bob))
+    monkeypatch.setattr(app, "_prompt_text", lambda *a, **kw: "please sync audio")
+    captured = []
+    monkeypatch.setattr(app, "_run_async", lambda fn: captured.append(fn()))
+
+    app._run_palette_action(PaletteAction("Add note", entry.name, entry))
+
+    result = captured[0]
+    assert result[3] == "Note added."
+    assert tickets_mod.load_all(entry.path)[0].text == "please sync audio"
+
+
+def test_open_search_palette_uses_cached_entries_for_instant_open(alice, monkeypatch):
+    """_open_search_palette must not do a fresh sync/build — it's meant to
+    be instantaneous; the palette action itself does fresh git work
+    regardless of whether the snapshot it was opened from was current."""
+    app = menubar_app.OpenDamMenuBarApp()
+    app.settings = AppSettings(repo_path=str(alice))
+    app._last_entries = "sentinel-cached-entries"
+
+    monkeypatch.setattr(menubar_app, "build_entries", lambda *a, **kw: (_ for _ in ()).throw(
+        AssertionError("must reuse the cached snapshot, not rebuild")
+    ))
+    shown = []
+    monkeypatch.setattr(app._palette, "show", lambda actions: shown.append(actions))
+    monkeypatch.setattr(menubar_app, "palette_actions", lambda entries: entries)
+
+    app._open_search_palette()
+    assert shown == ["sentinel-cached-entries"]
+
+
+def test_open_search_palette_builds_fresh_when_nothing_cached_yet(alice):
+    """Before the very first refresh (_last_entries is still None), there's
+    nothing to reuse — must fall back to a real build_entries() call."""
+    app = menubar_app.OpenDamMenuBarApp()
+    app.settings = AppSettings(repo_path=str(alice))
+    assert app._last_entries is None
+
+    app._open_search_palette()
+    assert [a.project for a in app._palette.visible_actions] == ["MyProject"]
+
+
+class _FakeEvent:
+    """A real NSEvent can't be synthesized in a test process — this is any
+    plain object exposing the two methods _is_hotkey_event actually reads."""
+    def __init__(self, key_code, modifier_flags):
+        self._key_code = key_code
+        self._modifier_flags = modifier_flags
+
+    def keyCode(self):
+        return self._key_code
+
+    def modifierFlags(self):
+        return self._modifier_flags
+
+
+def test_is_hotkey_event_matches_cmd_shift_c():
+    from AppKit import NSEventModifierFlagCommand, NSEventModifierFlagShift
+
+    cmd_shift = NSEventModifierFlagCommand | NSEventModifierFlagShift
+    assert menubar_app.OpenDamMenuBarApp._is_hotkey_event(_FakeEvent(key_code=8, modifier_flags=cmd_shift))
+
+
+def test_is_hotkey_event_rejects_wrong_key_or_modifiers():
+    from AppKit import NSEventModifierFlagCommand, NSEventModifierFlagOption, NSEventModifierFlagShift
+
+    cmd_shift = NSEventModifierFlagCommand | NSEventModifierFlagShift
+    is_hotkey = menubar_app.OpenDamMenuBarApp._is_hotkey_event
+
+    assert not is_hotkey(_FakeEvent(key_code=1, modifier_flags=cmd_shift)), "wrong key ('S', not 'C')"
+    assert not is_hotkey(_FakeEvent(key_code=8, modifier_flags=NSEventModifierFlagCommand)), "missing Shift"
+    assert not is_hotkey(
+        _FakeEvent(key_code=8, modifier_flags=cmd_shift | NSEventModifierFlagOption)
+    ), "an extra held modifier (Option) must not still match"
+
+
+def test_hotkey_registration_does_not_raise(alice):
+    """Registration must never crash even without Accessibility/Input
+    Monitoring permission granted — it should just silently end up
+    non-functional (the handler never fires), which is the whole point of
+    also having the "Search…" menu item as a guaranteed-to-work fallback."""
+    app = menubar_app.OpenDamMenuBarApp()
+    app.settings = AppSettings(repo_path=str(alice))
+    app._register_global_hotkey()  # must not raise
