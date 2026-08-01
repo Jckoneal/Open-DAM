@@ -1,13 +1,13 @@
 """macOS menu bar app — a top-bar view of the project library with
 checkout/check-in/release, so the common loop needs no terminal after
 first-time setup. All lock/ticket logic is the exact same code the CLI
-uses (`opendam.menubar_model`, `opendam.locking`, `opendam.launcher`,
-`opendam.git_ops`) — this module is only the rumps rendering + click
+uses (`collaborate.menubar_model`, `collaborate.locking`, `collaborate.launcher`,
+`collaborate.git_ops`) — this module is only the rumps rendering + click
 handling glue on top of it.
 
 Import this module only after confirming `rumps` is installed (see
-`opendam.cli.menubar`) — it's an optional extra (`pip install
-open-dam[menubar]`) since rumps pulls in pyobjc, which non-macOS users and
+`collaborate.cli.menubar`) — it's an optional extra (`pip install
+collaborate[menubar]`) since rumps pulls in pyobjc, which non-macOS users and
 CI shouldn't need.
 """
 
@@ -21,12 +21,12 @@ import rumps
 from AppKit import NSApplication, NSApplicationActivationPolicyAccessory
 from PyObjCTools import AppHelper
 
-from opendam import config as config_mod
-from opendam import git_ops
-from opendam import locking
-from opendam.errors import OpenDamError
-from opendam.launcher import get_launcher
-from opendam.menubar_model import REFRESH_SECONDS, AppSettings, ProjectEntry, build_entries, sync_repo
+from collaborate import config as config_mod
+from collaborate import git_ops
+from collaborate import locking
+from collaborate.errors import OpenDamError
+from collaborate.launcher import get_launcher
+from collaborate.menubar_model import REFRESH_SECONDS, AppSettings, ProjectEntry, build_entries, sync_repo
 
 TITLE = "\U0001f3ac"  # clapperboard — a stable, recognizable glyph in a crowded menu bar
 
@@ -35,7 +35,7 @@ def _activate() -> None:
     """Bring this app frontmost so its next alert/window can actually
     receive keystrokes.
 
-    We're a bare Python process run via the `dam` console script, not a
+    We're a bare Python process run via the `collab` console script, not a
     real .app bundle — so unlike a bundled app (which gets its activation
     policy from Info.plist's LSUIElement key), this process has no
     reliable default activation policy. Without explicitly setting one,
@@ -83,12 +83,12 @@ class OpenDamMenuBarApp(rumps.App):
 
     def _prompt_for_repo_path(self, initial: bool = False) -> None:
         message = (
-            "Enter the path to your Open-DAM project library "
-            "(the folder you got from 'dam clone')."
+            "Enter the path to your Collaborate project library "
+            "(the folder you got from 'collab clone')."
         )
         window = rumps.Window(
             message=message,
-            title="Open-DAM setup" if initial else "Change library folder",
+            title="Collaborate setup" if initial else "Change library folder",
             default_text=self.settings.repo_path or "",
             ok="Save",
             cancel="Quit" if initial else "Cancel",
@@ -104,7 +104,7 @@ class OpenDamMenuBarApp(rumps.App):
         if not path.is_dir() or not (path / ".git").exists():
             _activate()
             rumps.alert(
-                "Open-DAM",
+                "Collaborate",
                 f"'{path}' doesn't look like a project library (no .git inside). "
                 "Try again from the menu.",
             )
@@ -195,9 +195,9 @@ class OpenDamMenuBarApp(rumps.App):
             try:
                 present = fn()
             except OpenDamError as e:
-                present = ("alert", "Open-DAM", str(e))
+                present = ("alert", "Collaborate", str(e))
             except Exception as e:  # pragma: no cover - unexpected, still shouldn't crash the app
-                present = ("alert", "Open-DAM — unexpected error", str(e))
+                present = ("alert", "Collaborate — unexpected error", str(e))
             AppHelper.callAfter(self._async_finished, present)
 
         threading.Thread(target=worker, daemon=True).start()
@@ -216,7 +216,7 @@ class OpenDamMenuBarApp(rumps.App):
                     # rumps.notification needs a real .app bundle identity
                     # (a CFBundleIdentifier from an actual Info.plist) to
                     # register with the OS notification center — which a
-                    # bare script run via the `dam` console script will
+                    # bare script run via the `collab` console script will
                     # never have. Rather than depend on something
                     # structurally unavailable to us, show success in the
                     # menu bar title itself, which always works.
@@ -228,7 +228,7 @@ class OpenDamMenuBarApp(rumps.App):
                 # point; refresh() below must run regardless, or the menu
                 # silently stops reflecting reality (looks like "checkout
                 # didn't happen" when it actually did).
-                print(f"Open-DAM: could not show {kind}: {e}")
+                print(f"Collaborate: could not show {kind}: {e}")
         self.refresh()
 
     def _flash_title(self, text: str, seconds: float = 2.5) -> None:
@@ -248,8 +248,8 @@ class OpenDamMenuBarApp(rumps.App):
                 try:
                     get_launcher().launch(entry.path, app_path)
                 except OpenDamError as e:
-                    return ("alert", "Open-DAM", f"Checked out {entry.name}, but couldn't launch Premiere: {e}")
-                return ("notify", "Open-DAM", entry.name, f"Checked out — locked by you as of {lock.locked_at}")
+                    return ("alert", "Collaborate", f"Checked out {entry.name}, but couldn't launch Premiere: {e}")
+                return ("notify", "Collaborate", entry.name, f"Checked out — locked by you as of {lock.locked_at}")
 
             self._run_async(do)
 
@@ -259,7 +259,7 @@ class OpenDamMenuBarApp(rumps.App):
         def handler(_sender):
             _activate()
             confirmed = rumps.alert(
-                "Open-DAM",
+                "Collaborate",
                 f"Have you saved and closed {entry.name} in Premiere?",
                 ok="Yes",
                 cancel="Not yet",
@@ -278,7 +278,7 @@ class OpenDamMenuBarApp(rumps.App):
                 if not result.ok and "nothing to commit" not in result.stdout.lower():
                     raise OpenDamError(f"commit failed: {result.stderr}")
                 git_ops.push_with_retry(self.repo_path)
-                return ("notify", "Open-DAM", entry.name, "Checked in and released.")
+                return ("notify", "Collaborate", entry.name, "Checked in and released.")
 
             self._run_async(do)
 
@@ -288,7 +288,7 @@ class OpenDamMenuBarApp(rumps.App):
         def handler(_sender):
             _activate()
             confirmed = rumps.alert(
-                "Open-DAM",
+                "Collaborate",
                 f"Release {entry.name} without saving a new version to the library?",
                 ok="Release",
                 cancel="Cancel",
@@ -302,7 +302,7 @@ class OpenDamMenuBarApp(rumps.App):
                 git_ops.add(self.repo_path, [str(locking.lock_path_for(entry.path))])
                 git_ops.commit(self.repo_path, f"release: {entry.name} by {identity['user']}")
                 git_ops.push_with_retry(self.repo_path)
-                return ("notify", "Open-DAM", entry.name, "Released.")
+                return ("notify", "Collaborate", entry.name, "Released.")
 
             self._run_async(do)
 

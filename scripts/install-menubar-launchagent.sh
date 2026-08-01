@@ -1,22 +1,22 @@
 #!/bin/bash
-# Installs a LaunchAgent so the Open-DAM menu bar app starts automatically
+# Installs a LaunchAgent so the Collaborate menu bar app starts automatically
 # when you log in (macOS only). Run it once per machine.
 
 set -euo pipefail
 
-DAM_PATH="${1:-$(command -v dam || true)}"
+COLLAB_PATH="${1:-$(command -v collab || true)}"
 
-if [ -z "$DAM_PATH" ]; then
-  echo "Could not find the 'dam' command on your PATH." >&2
-  echo "Run: $0 /full/path/to/dam" >&2
+if [ -z "$COLLAB_PATH" ]; then
+  echo "Could not find the 'collab' command on your PATH." >&2
+  echo "Run: $0 /full/path/to/collab" >&2
   exit 1
 fi
-if [ ! -x "$DAM_PATH" ]; then
-  echo "'$DAM_PATH' is not an executable file." >&2
+if [ ! -x "$COLLAB_PATH" ]; then
+  echo "'$COLLAB_PATH' is not an executable file." >&2
   exit 1
 fi
 
-LABEL="com.opendam.menubar"
+LABEL="com.collaborate.menubar"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 
 mkdir -p "$HOME/Library/LaunchAgents"
@@ -29,7 +29,7 @@ cat > "$PLIST" <<EOF
     <string>$LABEL</string>
     <key>ProgramArguments</key>
     <array>
-        <string>$DAM_PATH</string>
+        <string>$COLLAB_PATH</string>
         <string>menubar</string>
     </array>
     <key>RunAtLoad</key>
@@ -37,9 +37,9 @@ cat > "$PLIST" <<EOF
     <key>KeepAlive</key>
     <false/>
     <key>StandardErrorPath</key>
-    <string>$HOME/Library/Logs/open-dam-menubar.log</string>
+    <string>$HOME/Library/Logs/collaborate-menubar.log</string>
     <key>StandardOutPath</key>
-    <string>$HOME/Library/Logs/open-dam-menubar.log</string>
+    <string>$HOME/Library/Logs/collaborate-menubar.log</string>
 </dict>
 </plist>
 EOF
@@ -49,6 +49,6 @@ launchctl load "$PLIST"
 
 echo "Installed: $PLIST"
 echo "The menu bar app will now start automatically at login, and has started now."
-echo "Logs: ~/Library/Logs/open-dam-menubar.log"
+echo "Logs: ~/Library/Logs/collaborate-menubar.log"
 echo
 echo "To remove: launchctl unload $PLIST && rm $PLIST"

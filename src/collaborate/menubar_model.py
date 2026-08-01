@@ -11,13 +11,13 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Optional
 
-from opendam import git_ops
-from opendam import locking
-from opendam import projects as projects_mod
-from opendam import tickets as tickets_mod
-from opendam.errors import OpenDamError
+from collaborate import git_ops
+from collaborate import locking
+from collaborate import projects as projects_mod
+from collaborate import tickets as tickets_mod
+from collaborate.errors import OpenDamError
 
-DEFAULT_SETTINGS_PATH = Path.home() / "Library" / "Application Support" / "Open-DAM" / "menubar.json"
+DEFAULT_SETTINGS_PATH = Path.home() / "Library" / "Application Support" / "Collaborate" / "menubar.json"
 REFRESH_SECONDS = 30
 
 
@@ -57,7 +57,7 @@ class ProjectEntry:
 
 
 def sync_repo(repo_path: Path) -> Optional[str]:
-    """Fetch + fast-forward pull, tolerating failure like `dam list` does.
+    """Fetch + fast-forward pull, tolerating failure like `collab list` does.
     Returns a warning string on failure, None on success."""
     try:
         git_ops.fetch(repo_path)

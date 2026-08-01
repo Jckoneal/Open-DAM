@@ -11,7 +11,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from opendam.errors import GitCommandError, PushContendedError, RemoteUnreachableError
+from collaborate.errors import GitCommandError, PushContendedError, RemoteUnreachableError
 
 DEFAULT_PUSH_RETRIES = 5
 
@@ -183,4 +183,4 @@ def current_branch(repo: Path) -> str:
     result = run_git(["symbolic-ref", "--short", "HEAD"], repo, check=False)
     if result.ok:
         return result.stdout.strip()
-    return "main"  # detached HEAD — shouldn't happen in a DAM repo, but don't crash
+    return "main"  # detached HEAD — shouldn't happen in a project library, but don't crash

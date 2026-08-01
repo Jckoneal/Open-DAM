@@ -13,7 +13,7 @@ would also add merge overhead (checking a project back into `main` becomes a bin
 merge — the exact problem we're trying to avoid) without adding any exclusivity
 guarantee.
 
-So Open-DAM uses a single shared `main` branch. Every project's `.prproj` and its
+So Collaborate uses a single shared `main` branch. Every project's `.prproj` and its
 lock file live there. The lock file — not the branch — is what provides mutual
 exclusion.
 
@@ -38,7 +38,7 @@ deleted because it was released, or did I never see it exist?).
 ## The claim race
 
 Git has no server-side locking primitive, so acquiring a lock is an optimistic
-pull → check → claim → push → verify loop (`opendam.locking.claim_lock`):
+pull → check → claim → push → verify loop (`collaborate.locking.claim_lock`):
 
 1. Fetch and fast-forward pull.
 2. Read the lock file. Abort if someone else holds it.
@@ -70,14 +70,14 @@ files in the meantime, so the rebase can only ever replay cleanly.
 
 Premiere has no reliable scriptable "on close" hook without ExtendScript/UXP, and
 the process staying alive doesn't mean any particular project is still open in it.
-Rather than polling for the process to exit, `dam checkin` just asks: "have you
+Rather than polling for the process to exit, `collab checkin` just asks: "have you
 saved and closed the project?" A best-effort `is_running()` check can annotate that
 prompt with a warning, but it never blocks or auto-triggers anything.
 
 ## Stale locks are never auto-reclaimed
 
-If someone force-quits without checking in, their lock just sits there. `dam
-status`/`dam list` surface its age, but recovering it is always a deliberate
+If someone force-quits without checking in, their lock just sits there. `collab
+status`/`collab list` surface its age, but recovering it is always a deliberate
 `--force` action by a human, not an automatic timeout — with a confirmation prompt
 and an audit record (`forced_by`) written into the resulting lock file. A small team
 doesn't need real RBAC for this; the confirmation-plus-audit-trail is deliberately
@@ -85,7 +85,7 @@ the whole mechanism for v1.
 
 ## Creating and importing projects
 
-`dam new` and `dam import` both register a project in two separate commits rather
+`collab new` and `collab import` both register a project in two separate commits rather
 than one atomic commit: first "here's the new/imported file" (plain add+commit+push,
 no locking concerns yet — nobody else's clone even knows this project exists until
 this lands), then a normal `claim_lock` call for the lock file. This is simpler than
@@ -93,10 +93,10 @@ trying to fold file-creation and lock-claiming into one commit, and there's no r
 to guard against in the first commit, since no other clone can be contending for a
 lock file whose project they don't know about yet.
 
-For `dam new` specifically: there is no way to drive Premiere into creating a new
+For `collab new` specifically: there is no way to drive Premiere into creating a new
 project with particular settings from the outside (no scriptable "new project" hook
 reachable from a CLI, same limitation as save/close — see above). If a `template_path`
-is configured, `dam new` just copies that file in, which sidesteps the problem
+is configured, `collab new` just copies that file in, which sidesteps the problem
 entirely. Without one, it launches a blank Premiere and waits for you to create and
 save the project yourself at the path it gives you, then confirms the file exists
 before committing it — the same "ask, don't detect" pattern as `checkin`.

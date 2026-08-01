@@ -1,19 +1,19 @@
-# Getting Started with Open-DAM
+# Getting Started with Collaborate
 
 *A guide for editors. No Git or programming experience needed.*
 
 ## What is this?
 
-Open-DAM works like a library checkout system for Premiere Pro projects.
+Collaborate works like a library checkout system for Premiere Pro projects.
 
 When a team shares Premiere projects, two people opening the same project at the
 same time is a disaster — Premiere project files can't be merged, so one person's
-work always gets thrown away. Open-DAM prevents that: before you edit a project,
+work always gets thrown away. Collaborate prevents that: before you edit a project,
 you **check it out**. While you have it checked out, it's yours — nobody else can
 open it through the system. When you're done, you **check it in**, which saves your
 version for the whole team and frees it up for the next person.
 
-Everything happens through a small tool called `dam` that you run in the Terminal
+Everything happens through a small tool called `collab` that you run in the Terminal
 app. You only need four commands day to day, and this guide walks through all of
 them.
 
@@ -44,22 +44,22 @@ Terminal is already on your Mac: press `Cmd+Space`, type `Terminal`, press Retur
 You type a command at the prompt and press Return to run it. That's all the
 Terminal knowledge this guide needs.
 
-### Step 1: Install the `dam` tool
+### Step 1: Install the `collab` tool
 
 Ask your team lead for the install command for your team. It will look something
 like this (one line, then Return):
 
 ```
-python3 -m pip install git+https://github.com/YOUR-TEAM/Open-DAM.git
+python3 -m pip install git+https://github.com/YOUR-TEAM/Collaborate.git
 ```
 
 Then check it worked:
 
 ```
-dam --help
+collab --help
 ```
 
-You should see a list of commands. If Terminal says `command not found: dam`,
+You should see a list of commands. If Terminal says `command not found: collab`,
 tell your team lead — it's a quick fix (the install location isn't on your PATH),
 not something you broke.
 
@@ -82,12 +82,12 @@ one-time hurdle.
 In Terminal (replace the address with your team's real one):
 
 ```
-dam clone https://github.com/YOUR-TEAM/Premiere-Projects.git --dir ~/Premiere-Projects
+collab clone https://github.com/YOUR-TEAM/Premiere-Projects.git --dir ~/Premiere-Projects
 cd ~/Premiere-Projects
 ```
 
 This creates a `Premiere-Projects` folder in your home folder and moves Terminal
-into it. **This folder is where you'll run all `dam` commands from now on.** Any
+into it. **This folder is where you'll run all `collab` commands from now on.** Any
 time you open a new Terminal window, start with:
 
 ```
@@ -97,7 +97,7 @@ cd ~/Premiere-Projects
 ### Step 4: Answer the setup questions
 
 ```
-dam init
+collab init
 ```
 
 The tool asks a few questions:
@@ -115,11 +115,11 @@ The tool asks a few questions:
 ### Step 5: Confirm everything is ready
 
 ```
-dam doctor
+collab doctor
 ```
 
 Every line should say `OK`. If `media_root` says `FAIL`, your external drive
-probably isn't plugged in — plug it in and run `dam doctor` again. If anything
+probably isn't plugged in — plug it in and run `collab doctor` again. If anything
 else says `FAIL`, send a screenshot to your team lead.
 
 **Setup is done.** You never have to do any of that again.
@@ -131,7 +131,7 @@ else says `FAIL`, send a screenshot to your team lead.
 ### See what's available
 
 ```
-dam list
+collab list
 ```
 
 ```
@@ -149,7 +149,7 @@ who, and since when.
 ### Start working on a project
 
 ```
-dam checkout Ep01
+collab checkout Ep01
 ```
 
 The tool grabs the latest version of the project, marks it as yours so nobody
@@ -161,7 +161,7 @@ as you like.
 Save your project in Premiere and close it. Then:
 
 ```
-dam checkin Ep01
+collab checkin Ep01
 ```
 
 It asks *"Have you saved and closed the project in Premiere?"* — type `y` and
@@ -177,7 +177,7 @@ things out/in with one click, no Terminal needed once it's installed.
 ### Starting a brand-new project
 
 ```
-dam new Ep03
+collab new Ep03
 ```
 
 If your team has a template configured, the new project is created from it and
@@ -192,28 +192,28 @@ don't need to check a project out to add one**, so a producer or another editor
 can flag work on a project any time:
 
 ```
-dam ticket add Ep01 "Fix audio sync at 02:14"
+collab ticket add Ep01 "Fix audio sync at 02:14"
 ```
 
 Whoever checks Ep01 out next sees the open tickets right in their Terminal,
 before Premiere even opens. To see or close them:
 
 ```
-dam ticket list Ep01           # every ticket, open and done
-dam ticket done Ep01 a3f2      # mark one done (use the id from the list)
+collab ticket list Ep01           # every ticket, open and done
+collab ticket done Ep01 a3f2      # mark one done (use the id from the list)
 ```
 
 And when you finish a session, you can leave a note for the next editor as part
 of checking in:
 
 ```
-dam checkin Ep01 --note "rough cut done, still needs color"
+collab checkin Ep01 --note "rough cut done, still needs color"
 ```
 
-### Adding a project that already exists (from before your team used Open-DAM)
+### Adding a project that already exists (from before your team used Collaborate)
 
 ```
-dam import ~/Desktop/OldProject.prproj
+collab import ~/Desktop/OldProject.prproj
 ```
 
 This copies the project into the team library. Add `--checkout` to start
@@ -224,7 +224,7 @@ working on it right away.
 ## Part 3 — Common situations
 
 **"I want to work on Ep02 but it's locked by someone else."**
-That's the system working. Ask them to `dam checkin` (if they're done) or wait.
+That's the system working. Ask them to `collab checkin` (if they're done) or wait.
 There is deliberately no way to take it without them (or an admin) agreeing.
 
 **"I need to step away but I'm not finished."**
@@ -232,18 +232,18 @@ You have two options:
 - Keep it checked out (do nothing) — fine for lunch, blocks others until you're back.
 - Save a snapshot for safety but keep the project yours:
   ```
-  dam checkin Ep01 --keep-lock
+  collab checkin Ep01 --keep-lock
   ```
 
 **"I opened a project, changed nothing, and want out."**
 ```
-dam release Ep01
+collab release Ep01
 ```
 Frees the project without saving a new version.
 
 **"I made a mess and want to throw away everything since my checkout."**
 ```
-dam release Ep01 --discard-local
+collab release Ep01 --discard-local
 ```
 It asks you to confirm — this permanently discards your changes since checkout,
 and the project goes back to the version in the team library.
@@ -251,7 +251,7 @@ and the project goes back to the version in the team library.
 **"Dana went on vacation with Ep02 checked out."**
 An admin (usually the team lead) can force it free:
 ```
-dam release Ep02 --force
+collab release Ep02 --force
 ```
 It asks you to type the project name to confirm, and the takeover is recorded so
 everyone can see who did it and when. Talk to the person first if you can — any
@@ -259,7 +259,7 @@ work they hadn't checked in stays only on their machine.
 
 **"I'm not sure what state things are in."**
 ```
-dam status Ep01
+collab status Ep01
 ```
 Shows who has it, since when, and whether you have unsaved-to-team changes.
 
@@ -268,7 +268,7 @@ Shows who has it, since when, and whether you have unsaved-to-team changes.
 ## Part 4 — For the team lead: setting up a new team library
 
 This is the one-time creation of the shared repository your editors will clone
-in Part 1. You'll need a GitHub account and the `dam` tool installed (Part 1,
+in Part 1. You'll need a GitHub account and the `collab` tool installed (Part 1,
 Steps 0–1).
 
 1. **Create an empty repository on GitHub.** On github.com: **New repository** →
@@ -277,15 +277,15 @@ Steps 0–1).
 
 2. **Clone it and set yourself up:**
    ```
-   dam clone https://github.com/YOUR-TEAM/Premiere-Projects.git --dir ~/Premiere-Projects
+   collab clone https://github.com/YOUR-TEAM/Premiere-Projects.git --dir ~/Premiere-Projects
    cd ~/Premiere-Projects
-   dam init
+   collab init
    ```
 
 3. **Add your first projects.** Import existing ones, or start fresh:
    ```
-   dam import ~/OldProjects/Ep01.prproj
-   dam new Ep02
+   collab import ~/OldProjects/Ep01.prproj
+   collab new Ep02
    ```
 
 4. **Agree on a media layout.** Decide the folder structure for raw footage
@@ -297,11 +297,11 @@ Steps 0–1).
 
 5. **Optional: create a template project** (sequences, bins, and settings your
    team always starts from), and have each editor enter its path during
-   `dam init` — then `dam new` starts every project from it. Two rules for the
+   `collab init` — then `collab new` starts every project from it. Two rules for the
    template file:
    - **Keep it outside the library folder** (e.g. on the shared media drive) —
      never point the template at a project that lives inside the library.
-   - **Don't have it open in Premiere** when someone runs `dam new`. Copying a
+   - **Don't have it open in Premiere** when someone runs `collab new`. Copying a
      project Premiere currently has open confuses Premiere into leaving stray
      rescue copies behind (see Part 5).
 
@@ -316,33 +316,33 @@ Steps 0–1).
 | The tool says... | What it means | What to do |
 |---|---|---|
 | `'Ep01' is already checked out by <name>` | Someone has it | Wait, or ask them to check it in |
-| `not inside a DAM git repo` | Terminal isn't in the project folder | `cd ~/Premiere-Projects` and try again |
-| `No project named 'X' found` | Typo, or the project doesn't exist | `dam list` to see the real names |
+| `not inside a project library` | Terminal isn't in the project folder | `cd ~/Premiere-Projects` and try again |
+| `No project named 'X' found` | Typo, or the project doesn't exist | `collab list` to see the real names |
 | `Lock is no longer yours` | An admin force-released your checkout while you worked | Talk to your team; `--force-checkin` can still save your version if it should win |
-| `Lock acquired, but could not launch Premiere` | Your checkout worked; only the app launch failed | Run `dam doctor`; open the `.prproj` manually this once |
+| `Lock acquired, but could not launch Premiere` | Your checkout worked; only the app launch failed | Run `collab doctor`; open the `.prproj` manually this once |
 | `could not reach remote` / network errors | No internet, or GitHub sign-in problem | Check your connection, retry; if it persists, ask your lead |
 | `remote is contended, try again shortly` | Rare traffic jam — several people syncing at the exact same moment | Just run the command again |
-| Premiere opens but all media is offline | Your external drive isn't mounted, or its folder layout doesn't match the team's | Plug the drive in and reopen; `dam doctor` confirms the media path |
-| `'X' has local uncommitted changes` | A previous session didn't finish cleanly | `dam checkin X` to save it, or `dam release X --discard-local` to throw it away |
-| A weird project appears in `dam list`, named like `Ep01--edebf705-…-2026-07-15_22-20-28` | A rescue copy Premiere made — usually because a project was copied or changed while Premiere had it open (e.g. a template that lives inside the library) | Safe to delete the file; move your template outside the library folder |
+| Premiere opens but all media is offline | Your external drive isn't mounted, or its folder layout doesn't match the team's | Plug the drive in and reopen; `collab doctor` confirms the media path |
+| `'X' has local uncommitted changes` | A previous session didn't finish cleanly | `collab checkin X` to save it, or `collab release X --discard-local` to throw it away |
+| A weird project appears in `collab list`, named like `Ep01--edebf705-…-2026-07-15_22-20-28` | A rescue copy Premiere made — usually because a project was copied or changed while Premiere had it open (e.g. a template that lives inside the library) | Safe to delete the file; move your template outside the library folder |
 
-Still stuck? Run `dam doctor`, screenshot the output, and send it to your team
+Still stuck? Run `collab doctor`, screenshot the output, and send it to your team
 lead — it checks all the usual suspects at once.
 
 ## Cheat sheet
 
 ```
-dam list                          what's available, who has what
-dam checkout <project>            start working (opens Premiere)
-dam checkin <project>             done working (saves + frees it)
-dam release <project>             changed your mind, changed nothing
-dam new <project>                 brand-new project
-dam import <file>                 bring an existing .prproj into the library
-dam status <project>              details on one project
-dam doctor                        is everything set up right?
-dam ticket add <project> "note"   flag work on a project (no checkout needed)
-dam ticket list <project>         see a project's to-do list
-dam ticket done <project> <id>    mark a to-do done
-dam checkin <project> --note "…"  check in + leave a note for the next editor
-dam menubar                       launch the menu bar app (top-bar buttons, no terminal)
+collab list                          what's available, who has what
+collab checkout <project>            start working (opens Premiere)
+collab checkin <project>             done working (saves + frees it)
+collab release <project>             changed your mind, changed nothing
+collab new <project>                 brand-new project
+collab import <file>                 bring an existing .prproj into the library
+collab status <project>              details on one project
+collab doctor                        is everything set up right?
+collab ticket add <project> "note"   flag work on a project (no checkout needed)
+collab ticket list <project>         see a project's to-do list
+collab ticket done <project> <id>    mark a to-do done
+collab checkin <project> --note "…"  check in + leave a note for the next editor
+collab menubar                       launch the menu bar app (top-bar buttons, no terminal)
 ```

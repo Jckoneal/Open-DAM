@@ -18,8 +18,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from opendam import git_ops
-from opendam.errors import GitCommandError, LockHeldError, StaleLockRaceError
+from collaborate import git_ops
+from collaborate.errors import GitCommandError, LockHeldError, StaleLockRaceError
 
 SCHEMA_VERSION = 1
 MAX_CLAIM_RETRIES = 5

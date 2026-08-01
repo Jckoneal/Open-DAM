@@ -2,8 +2,8 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from opendam import cli, config as config_mod
-from opendam.locking import Lock, lock_path_for
+from collaborate import cli, config as config_mod
+from collaborate.locking import Lock, lock_path_for
 
 runner = CliRunner()
 

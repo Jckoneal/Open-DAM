@@ -1,7 +1,7 @@
 from typer.testing import CliRunner
 
-from opendam import tickets as tickets_mod
-from opendam.cli import app
+from collaborate import tickets as tickets_mod
+from collaborate.cli import app
 
 runner = CliRunner()
 

@@ -1,5 +1,5 @@
 class OpenDamError(Exception):
-    """Base class for all opendam errors."""
+    """Base class for all collaborate errors."""
 
 
 class GitCommandError(OpenDamError):

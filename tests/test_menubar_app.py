@@ -9,8 +9,8 @@ import pytest
 
 rumps = pytest.importorskip("rumps")
 
-from opendam import menubar_app
-from opendam.menubar_model import AppSettings
+from collaborate import menubar_app
+from collaborate.menubar_model import AppSettings
 
 
 class _FakeSuccessfulLauncher:
@@ -55,7 +55,7 @@ def test_checkout_do_never_calls_rumps_directly(alice, monkeypatch):
     process doesn't have — and instead runs do() synchronously so this
     test only has to trust threading.Thread itself, not reinvent it.
     """
-    from opendam.menubar_model import build_entries
+    from collaborate.menubar_model import build_entries
 
     calls = []
     monkeypatch.setattr(menubar_app.rumps, "notification", lambda *a: calls.append(("notify", a)))
@@ -74,10 +74,10 @@ def test_checkout_do_never_calls_rumps_directly(alice, monkeypatch):
     assert calls == [], "do() must not call rumps directly — only _async_finished may"
     result = captured[0]
     assert result[0] == "notify"
-    assert result[1:3] == ("Open-DAM", "MyProject")
+    assert result[1:3] == ("Collaborate", "MyProject")
 
     # and the real git/lock side effect actually happened
-    from opendam import locking
+    from collaborate import locking
     lock = locking.Lock.load(locking.lock_path_for(entry.path))
     assert lock.is_held_by("alice@example.com")
 
@@ -98,20 +98,20 @@ def test_async_finished_dispatches_by_kind_and_always_refreshes(tmp_path, monkey
     app.settings = AppSettings(repo_path=None)  # refresh() no-ops harmlessly without a repo
     app._busy = True
 
-    app._async_finished(("notify", "Open-DAM", "MyProject", "done"))
+    app._async_finished(("notify", "Collaborate", "MyProject", "done"))
     assert app.title == "✓ MyProject"
     assert app._busy is False
 
     app._busy = True
-    app._async_finished(("alert", "Open-DAM", "oops"))
-    assert calls == [("alert", ("Open-DAM", "oops"))]
+    app._async_finished(("alert", "Collaborate", "oops"))
+    assert calls == [("alert", ("Collaborate", "oops"))]
     assert app._busy is False
 
 
 def test_notify_never_calls_rumps_notification(monkeypatch):
     """Regression: rumps.notification requires a real .app bundle identity
     (a CFBundleIdentifier from an actual Info.plist) to register with the
-    OS notification center — something a bare script run via the `dam`
+    OS notification center — something a bare script run via the `collab`
     console script structurally cannot have. It failed outright in the
     field ("Failed to setup the notification center... missing
     CFBundleIdentifier"), and because that used to run before refresh(), a
@@ -129,7 +129,7 @@ def test_notify_never_calls_rumps_notification(monkeypatch):
     monkeypatch.setattr(app, "refresh", lambda: refreshed.append(True))
     app._busy = True
 
-    app._async_finished(("notify", "Open-DAM", "MyProject", "Checked out"))
+    app._async_finished(("notify", "Collaborate", "MyProject", "Checked out"))
 
     assert refreshed == [True]
     assert app._busy is False

@@ -1,7 +1,7 @@
 from typer.testing import CliRunner
 
-from opendam import projects as projects_mod
-from opendam.cli import app
+from collaborate import projects as projects_mod
+from collaborate.cli import app
 
 runner = CliRunner()
 

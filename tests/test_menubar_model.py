@@ -1,8 +1,8 @@
 """Tests for the pure menu-bar logic. Deliberately does not import rumps —
 this module must be testable (and is) without the `menubar` extra installed."""
 
-from opendam import menubar_model as mb
-from opendam.cli import app
+from collaborate import menubar_model as mb
+from collaborate.cli import app
 from typer.testing import CliRunner
 
 runner = CliRunner()
