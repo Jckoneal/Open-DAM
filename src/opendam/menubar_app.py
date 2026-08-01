@@ -44,9 +44,23 @@ class OpenDamMenuBarApp(rumps.App):
         super().__init__(TITLE, quit_button="Quit")
         self.settings = AppSettings.load()
         self._busy = False
+        self.refresh_timer = None
+        # rumps.App.run() creates the real NSApp delegate and activates the
+        # app — but only once *it* runs, which is after this constructor
+        # returns. Doing first-run setup (a dialog needing keyboard focus)
+        # here would show it before any of that exists. A rumps.Timer
+        # registers on the calling thread's current run loop but only
+        # actually fires once that run loop is spinning — i.e. after
+        # App.run() has done its setup — so deferring through one gets the
+        # ordering right for free, on the main thread, no extra threading.
+        self._startup_timer = rumps.Timer(self._on_startup, 0.05)
+        self._startup_timer.start()
+
+    def _on_startup(self, sender) -> None:
+        sender.stop()
         self._ensure_repo_configured()
-        self.timer = rumps.Timer(self.on_timer, REFRESH_SECONDS)
-        self.timer.start()
+        self.refresh_timer = rumps.Timer(self.on_timer, REFRESH_SECONDS)
+        self.refresh_timer.start()
         self.refresh()
 
     # ---------- setup ----------
