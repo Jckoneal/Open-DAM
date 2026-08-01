@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Optional
 
 import rumps
-from AppKit import NSApplication
+from AppKit import NSApplication, NSApplicationActivationPolicyAccessory
 
 from opendam import config as config_mod
 from opendam import git_ops
@@ -31,12 +31,22 @@ TITLE = "\U0001f3ac"  # clapperboard — a stable, recognizable glyph in a crowd
 
 
 def _activate() -> None:
-    """Bring this app frontmost so its next alert/window can receive
-    keystrokes. rumps.App.run() does this itself once the main event loop
-    starts, but our first-run setup prompt fires from __init__ — before
-    run() — so without this, that dialog appears but never becomes key,
-    and typing into it silently does nothing."""
-    NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
+    """Bring this app frontmost so its next alert/window can actually
+    receive keystrokes.
+
+    We're a bare Python process run via the `dam` console script, not a
+    real .app bundle — so unlike a bundled app (which gets its activation
+    policy from Info.plist's LSUIElement key), this process has no
+    reliable default activation policy. Without explicitly setting one,
+    activateIgnoringOtherApps_ can be a no-op: the dialog paints on top
+    visually, its field even shows a focus ring, but the OS keeps routing
+    actual keystrokes to whatever app (e.g. the Terminal we were launched
+    from) was frontmost. Accessory = no Dock icon (right for a
+    menu-bar-only app) but still lets us properly become the active app.
+    """
+    app = NSApplication.sharedApplication()
+    app.setActivationPolicy_(NSApplicationActivationPolicyAccessory)
+    app.activateIgnoringOtherApps_(True)
 
 
 class OpenDamMenuBarApp(rumps.App):
@@ -172,6 +182,12 @@ class OpenDamMenuBarApp(rumps.App):
         self.title = TITLE + " ⋯"  # busy indicator
 
         def worker():
+            # NOTE: the rumps.alert() calls below run on this background
+            # thread, which isn't a fully-supported AppKit pattern (UI work
+            # is meant to happen on the main thread). In practice this has
+            # worked without crashing in manual testing so far, but a
+            # cleaner version would marshal these back to the main thread
+            # instead — flagging as a known follow-up, not fixed here.
             try:
                 fn()
             except OpenDamError as e:
@@ -204,6 +220,7 @@ class OpenDamMenuBarApp(rumps.App):
 
     def _make_checkin(self, entry: ProjectEntry):
         def handler(_sender):
+            _activate()
             confirmed = rumps.alert(
                 "Open-DAM",
                 f"Have you saved and closed {entry.name} in Premiere?",
@@ -232,6 +249,7 @@ class OpenDamMenuBarApp(rumps.App):
 
     def _make_release(self, entry: ProjectEntry):
         def handler(_sender):
+            _activate()
             confirmed = rumps.alert(
                 "Open-DAM",
                 f"Release {entry.name} without saving a new version to the library?",
