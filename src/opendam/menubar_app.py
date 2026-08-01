@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Optional
 
 import rumps
+from AppKit import NSApplication
 
 from opendam import config as config_mod
 from opendam import git_ops
@@ -27,6 +28,15 @@ from opendam.launcher import get_launcher
 from opendam.menubar_model import REFRESH_SECONDS, AppSettings, ProjectEntry, build_entries, sync_repo
 
 TITLE = "\U0001f3ac"  # clapperboard — a stable, recognizable glyph in a crowded menu bar
+
+
+def _activate() -> None:
+    """Bring this app frontmost so its next alert/window can receive
+    keystrokes. rumps.App.run() does this itself once the main event loop
+    starts, but our first-run setup prompt fires from __init__ — before
+    run() — so without this, that dialog appears but never becomes key,
+    and typing into it silently does nothing."""
+    NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
 
 
 class OpenDamMenuBarApp(rumps.App):
@@ -59,6 +69,7 @@ class OpenDamMenuBarApp(rumps.App):
             cancel="Quit" if initial else "Cancel",
             dimensions=(320, 24),
         )
+        _activate()
         response = window.run()
         if not response.clicked:
             if initial:
@@ -66,6 +77,7 @@ class OpenDamMenuBarApp(rumps.App):
             return
         path = Path(response.text.strip()).expanduser()
         if not path.is_dir() or not (path / ".git").exists():
+            _activate()
             rumps.alert(
                 "Open-DAM",
                 f"'{path}' doesn't look like a project library (no .git inside). "
