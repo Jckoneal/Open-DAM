@@ -211,17 +211,33 @@ class OpenDamMenuBarApp(rumps.App):
             try:
                 if kind == "alert":
                     _activate()
-                (rumps.alert if kind == "alert" else rumps.notification)(*args)
+                    rumps.alert(*args)
+                else:
+                    # rumps.notification needs a real .app bundle identity
+                    # (a CFBundleIdentifier from an actual Info.plist) to
+                    # register with the OS notification center — which a
+                    # bare script run via the `dam` console script will
+                    # never have. Rather than depend on something
+                    # structurally unavailable to us, show success in the
+                    # menu bar title itself, which always works.
+                    _, subtitle, message = args
+                    self._flash_title(f"✓ {subtitle}")
             except Exception as e:
-                # Showing the result is best-effort — e.g. rumps.notification
-                # can fail entirely when not running from a real .app bundle
-                # ("missing CFBundleIdentifier"). The underlying git/lock
+                # Still best-effort beyond that: the underlying git/lock
                 # operation already succeeded or failed for real by this
-                # point; refresh() below must still run either way, or the
-                # menu silently stops reflecting reality (looks like
-                # "checkout didn't happen" when it actually did).
+                # point; refresh() below must run regardless, or the menu
+                # silently stops reflecting reality (looks like "checkout
+                # didn't happen" when it actually did).
                 print(f"Open-DAM: could not show {kind}: {e}")
         self.refresh()
+
+    def _flash_title(self, text: str, seconds: float = 2.5) -> None:
+        self.title = text
+        rumps.Timer(self._end_flash, seconds).start()
+
+    def _end_flash(self, timer) -> None:
+        timer.stop()
+        self.title = TITLE
 
     def _make_checkout(self, entry: ProjectEntry):
         def handler(_sender):
