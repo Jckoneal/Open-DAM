@@ -10,6 +10,14 @@ def _project(repo):
     return repo / "MyProject.prproj"
 
 
+def _flat(text: str) -> str:
+    """Collapse whitespace/newlines. Rich wraps console/table output to the
+    detected terminal width, which is environment-dependent and can insert a
+    line break mid-phrase — asserting on a multi-word substring directly is
+    flaky; flatten first so wrapping can't split what we're looking for."""
+    return " ".join(text.split())
+
+
 def test_add_ticket_without_holding_lock(alice, bob):
     # alice holds the lock...
     result = runner.invoke(app, ["checkout", "MyProject", "--repo", str(alice), "--no-launch"])
@@ -27,7 +35,7 @@ def test_add_ticket_without_holding_lock(alice, bob):
     # and alice sees it after her next ticket list (which syncs)
     result = runner.invoke(app, ["ticket", "list", "MyProject", "--repo", str(alice)])
     assert result.exit_code == 0, result.output
-    assert "Fix audio sync" in result.output
+    assert "Fix audio sync" in _flat(result.output)
     assert "open" in result.output
 
 
@@ -41,8 +49,9 @@ def test_concurrent_adds_from_stale_clones_both_survive(alice, bob):
     assert result.exit_code == 0, result.output
 
     result = runner.invoke(app, ["ticket", "list", "MyProject", "--repo", str(alice)])
-    assert "alice note" in result.output
-    assert "bob note" in result.output
+    flat = _flat(result.output)
+    assert "alice note" in flat
+    assert "bob note" in flat
 
 
 def test_checkin_succeeds_after_remote_advanced_during_session(alice, bob):
@@ -63,7 +72,7 @@ def test_checkin_succeeds_after_remote_advanced_during_session(alice, bob):
 
     # both alice's edit and bob's ticket survived
     result = runner.invoke(app, ["ticket", "list", "MyProject", "--repo", str(alice)])
-    assert "mid-session note" in result.output
+    assert "mid-session note" in _flat(result.output)
 
 
 def test_ticket_done_by_prefix(alice):
@@ -108,8 +117,9 @@ def test_checkin_note_creates_ticket_in_checkin_commit(alice, bob):
     # bob checks out next and is shown the note
     result = runner.invoke(app, ["checkout", "MyProject", "--repo", str(bob), "--no-launch"])
     assert result.exit_code == 0, result.output
-    assert "rough cut done, needs color" in result.output
-    assert "To do on this project" in result.output
+    flat = _flat(result.output)
+    assert "rough cut done, needs color" in flat
+    assert "To do on this project" in flat
 
 
 def test_list_shows_open_ticket_count(alice):
@@ -136,5 +146,6 @@ def test_ticket_list_open_only_filter(alice):
 
     result = runner.invoke(app, ["ticket", "list", "MyProject", "--open", "--repo", str(alice)])
     assert result.exit_code == 0, result.output
-    assert "stays open" in result.output
-    assert "will be closed" not in result.output
+    flat = _flat(result.output)
+    assert "stays open" in flat
+    assert "will be closed" not in flat

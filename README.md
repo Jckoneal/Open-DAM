@@ -22,6 +22,12 @@ files and their lock metadata.
 > library step by step, and has a section for the team lead creating one from
 > scratch. This README is the technical reference.
 
+There's also a **[menu bar app](docs/menubar-app.md)** — an icon in the top
+bar showing every project's status, with checkout/check-in/release one click
+away, no terminal needed day-to-day. Install with `pip install -e ".[menubar]"`
+then `dam menubar` (or `./scripts/install-menubar-launchagent.sh` to start it
+automatically at login).
+
 ## How locking works
 
 Each project has a sibling lock file committed alongside it on `main`:
@@ -144,6 +150,7 @@ dam release MyShow_Ep01 --force
 | `dam ticket done <project> <id>` | Mark a ticket done (id prefix from `ticket list`) |
 | `dam config get/set` | Read/write `.damconfig.yaml` values |
 | `dam doctor` | Diagnostics: git, remote, Premiere path, media root |
+| `dam menubar` | Launch the [menu bar app](docs/menubar-app.md) (needs `pip install -e ".[menubar]"`) |
 
 ## Configuration
 

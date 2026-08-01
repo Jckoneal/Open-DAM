@@ -170,6 +170,10 @@ available for the next person. That's the whole loop:
 
 > **checkout → edit in Premiere → save & close → checkin**
 
+Prefer clicking to typing? There's a **[menu bar app](menubar-app.md)** that
+puts this same loop in your Mac's top bar — see what's available and check
+things out/in with one click, no Terminal needed once it's installed.
+
 ### Starting a brand-new project
 
 ```
@@ -340,4 +344,5 @@ dam ticket add <project> "note"   flag work on a project (no checkout needed)
 dam ticket list <project>         see a project's to-do list
 dam ticket done <project> <id>    mark a to-do done
 dam checkin <project> --note "…"  check in + leave a note for the next editor
+dam menubar                       launch the menu bar app (top-bar buttons, no terminal)
 ```

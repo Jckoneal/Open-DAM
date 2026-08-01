@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import platform
 import shutil
 from pathlib import Path
 from typing import Optional
@@ -59,23 +60,12 @@ def _clean_path_input(raw: str) -> Optional[str]:
 
 
 def _push_with_retry(repo_path: Path) -> None:
-    """Push local commits, rebasing onto unrelated remote advances on
-    rejection. Safe because the lock invariant guarantees nobody else
-    touches the files we ourselves just committed."""
-    for _ in range(locking.MAX_CLAIM_RETRIES):
-        push_result = git_ops.push(repo_path)
-        if push_result.ok:
-            return
-        if git_ops.is_push_rejected(push_result):
-            rebase_result = git_ops.pull_rebase(repo_path)
-            if not rebase_result.ok:
-                git_ops.run_git(["rebase", "--abort"], repo_path, check=False)
-                _fail(f"could not integrate remote changes: {rebase_result.stderr}")
-                return
-            continue
-        _fail(f"push failed: {push_result.stderr}")
-        return
-    _fail("Could not push — remote is contended, try again shortly.")
+    """CLI wrapper over git_ops.push_with_retry (shared with the menu bar
+    app) that turns a failure into the standard _fail() exit."""
+    try:
+        git_ops.push_with_retry(repo_path)
+    except OpenDamError as e:
+        _fail(str(e))
 
 
 @app.command()
@@ -668,6 +658,24 @@ def doctor(repo: str = typer.Option(".", help="Path to the DAM repo")) -> None:
     for label, ok in checks:
         mark = "[green]OK[/green]" if ok else "[red]FAIL[/red]"
         console.print(f"  [{mark}] {label}")
+
+
+@app.command()
+def menubar() -> None:
+    """Launch the macOS menu bar app — project status and checkout/checkin
+    from the top bar, no terminal needed after this."""
+    if platform.system() != "Darwin":
+        _fail("The menu bar app is macOS only.")
+        return
+    try:
+        from opendam.menubar_app import run
+    except ImportError:
+        _fail(
+            "The menu bar app needs its extra dependency. Install with:\n"
+            "  pip install 'open-dam[menubar]'"
+        )
+        return
+    run()
 
 
 if __name__ == "__main__":

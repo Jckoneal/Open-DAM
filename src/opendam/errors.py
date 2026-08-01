@@ -33,6 +33,10 @@ class StaleLockRaceError(OpenDamError):
     """Raised when the optimistic lock-claim loop exhausts its retries."""
 
 
+class PushContendedError(OpenDamError):
+    """Raised when push_with_retry exhausts its retries against a contended remote."""
+
+
 class DirtyWorkingTreeError(OpenDamError):
     pass
 

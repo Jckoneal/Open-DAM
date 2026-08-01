@@ -11,7 +11,9 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from opendam.errors import GitCommandError, RemoteUnreachableError
+from opendam.errors import GitCommandError, PushContendedError, RemoteUnreachableError
+
+DEFAULT_PUSH_RETRIES = 5
 
 NETWORK_ERROR_MARKERS = (
     "could not resolve host",
@@ -116,6 +118,30 @@ def push(repo: Path, remote: str = "origin", branch: str | None = None) -> GitRe
 def is_push_rejected(result: GitResult) -> bool:
     lowered = result.stderr.lower()
     return not result.ok and any(marker in lowered for marker in NON_FAST_FORWARD_MARKERS)
+
+
+def push_with_retry(repo: Path, remote: str = "origin", max_retries: int = DEFAULT_PUSH_RETRIES) -> None:
+    """Push local commits, rebasing onto unrelated remote advances on
+    rejection. Safe because the lock invariant guarantees nobody else
+    touches the files we ourselves just committed. Shared by the CLI and
+    the menu bar app so both surface exactly the same retry behavior.
+
+    Raises GitCommandError on a hard failure, PushContendedError if the
+    remote stays contended past max_retries."""
+    for _ in range(max_retries):
+        push_result = push(repo, remote)
+        if push_result.ok:
+            return
+        if is_push_rejected(push_result):
+            rebase_result = pull_rebase(repo, remote)
+            if not rebase_result.ok:
+                run_git(["rebase", "--abort"], repo, check=False)
+                raise GitCommandError(
+                    ["pull", "--rebase", remote], rebase_result.returncode, rebase_result.stderr
+                )
+            continue
+        raise GitCommandError(["push", remote], push_result.returncode, push_result.stderr)
+    raise PushContendedError("Could not push — remote is contended, try again shortly.")
 
 
 def add(repo: Path, paths: list[str]) -> GitResult:
