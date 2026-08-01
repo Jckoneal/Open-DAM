@@ -29,6 +29,20 @@ NON_FAST_FORWARD_MARKERS = (
     "rejected",
 )
 
+# git phrases "there was truly nothing to commit" differently depending on
+# repo state — a clean tree ("nothing to commit, working tree clean") is
+# only one of them; untracked files present ("nothing added to commit but
+# untracked files present") or unstaged modifications elsewhere ("no
+# changes added to commit") are just as benign but don't contain the
+# literal substring "nothing to commit". A check that only looked for that
+# one phrase treated the other two as real failures — with an empty,
+# unhelpful stderr, since commit's own messages go to stdout, not stderr.
+EMPTY_COMMIT_MARKERS = (
+    "nothing to commit",
+    "nothing added to commit",
+    "no changes added to commit",
+)
+
 
 @dataclass
 class GitResult:
@@ -153,6 +167,13 @@ def commit(repo: Path, message: str, allow_empty: bool = False) -> GitResult:
     if allow_empty:
         args.append("--allow-empty")
     return run_git(args, repo, check=False)
+
+
+def is_empty_commit_noop(result: GitResult) -> bool:
+    """True when a `commit()` call "failed" only because there was truly
+    nothing to commit — a benign no-op, not a real error."""
+    lowered = result.stdout.lower()
+    return not result.ok and any(marker in lowered for marker in EMPTY_COMMIT_MARKERS)
 
 
 def status_porcelain(repo: Path, paths: list[str] | None = None) -> list[str]:

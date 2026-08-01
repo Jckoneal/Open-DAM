@@ -375,7 +375,7 @@ class OpenDamMenuBarApp(rumps.App):
                     git_ops.add(self.repo_path, [str(locking.lock_path_for(entry.path))])
                 commit_msg = message or f"checkin: {entry.name} by {identity['user']}"
                 result = git_ops.commit(self.repo_path, commit_msg)
-                if not result.ok and "nothing to commit" not in result.stdout.lower():
+                if not result.ok and not git_ops.is_empty_commit_noop(result):
                     raise OpenDamError(f"commit failed: {result.stderr}")
                 git_ops.push_with_retry(self.repo_path)
                 status = "Checked in — lock kept." if keep_lock else "Checked in and released."
@@ -447,7 +447,7 @@ class OpenDamMenuBarApp(rumps.App):
             result = git_ops.commit(
                 self.repo_path, f"ticket: add {ticket.id} to {entry.name} by {identity['user']}"
             )
-            if not result.ok and "nothing to commit" not in result.stdout.lower():
+            if not result.ok and not git_ops.is_empty_commit_noop(result):
                 raise OpenDamError(f"commit failed: {result.stderr}")
             git_ops.push_with_retry(self.repo_path)
             return ("notify", "Collaborate", entry.name, "Note added.")
@@ -538,7 +538,7 @@ class OpenDamMenuBarApp(rumps.App):
                 identity = locking.current_identity(self.repo_path)
                 git_ops.add(self.repo_path, [str(target_path)])
                 result = git_ops.commit(self.repo_path, f"new project: {target} by {identity['user']}")
-                if not result.ok and "nothing to commit" not in result.stdout.lower():
+                if not result.ok and not git_ops.is_empty_commit_noop(result):
                     raise OpenDamError(f"commit failed: {result.stderr}")
                 git_ops.push_with_retry(self.repo_path)
 

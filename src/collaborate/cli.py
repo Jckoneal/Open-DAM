@@ -158,7 +158,7 @@ def _register_new_project(repo_path: Path, target_path: Path, commit_msg: str) -
     nobody else's clone knows this project exists until this lands."""
     git_ops.add(repo_path, [str(target_path)])
     result = git_ops.commit(repo_path, commit_msg)
-    if not result.ok and "nothing to commit" not in result.stdout.lower():
+    if not result.ok and not git_ops.is_empty_commit_noop(result):
         _fail(f"commit failed: {result.stderr}")
         return
     # No pull here: with a local commit already made, `pull --ff-only` can
@@ -414,7 +414,7 @@ def checkin(
     commit_msg = message or f"checkin: {info.name} by {identity['user']}"
     if dirty or not keep_lock or new_ticket:
         result = git_ops.commit(repo_path, commit_msg)
-        if not result.ok and "nothing to commit" not in result.stdout.lower():
+        if not result.ok and not git_ops.is_empty_commit_noop(result):
             _fail(f"commit failed: {result.stderr}")
             return
 
