@@ -1,4 +1,4 @@
-from opendam import git_ops
+from collaborate import git_ops
 
 
 def test_fetch_and_pull(alice):

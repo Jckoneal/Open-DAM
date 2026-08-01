@@ -16,8 +16,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Optional
 
-from opendam.errors import OpenDamError
-from opendam.locking import utcnow_iso
+from collaborate.errors import OpenDamError
+from collaborate.locking import utcnow_iso
 
 SCHEMA_VERSION = 1
 
@@ -66,7 +66,7 @@ def load_all(project_file: Path) -> list[Ticket]:
     # tiebreaker, sort order falls back to filesystem glob order, which is
     # OS-dependent, not creation order. File mtime has sub-second resolution
     # on any filesystem we run on and reflects real write order, since each
-    # `dam ticket add` writes its file synchronously before returning.
+    # `collab ticket add` writes its file synchronously before returning.
     pairs = [(Ticket.load(p), p.stat().st_mtime) for p in tdir.glob("*.json")]
     pairs.sort(key=lambda pair: (pair[0].created_at, pair[1]))
     return [ticket for ticket, _mtime in pairs]
@@ -97,7 +97,7 @@ def find_by_prefix(project_file: Path, id_prefix: str) -> Ticket:
     if not matches:
         raise TicketNotFoundError(
             f"No ticket starting with '{id_prefix}' on {project_file.stem}. "
-            f"Run 'dam ticket list {project_file.stem}' to see ticket ids."
+            f"Run 'collab ticket list {project_file.stem}' to see ticket ids."
         )
     if len(matches) > 1:
         ids = ", ".join(t.id for t in matches)

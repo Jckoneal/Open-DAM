@@ -1,5 +1,5 @@
 #!/bin/bash
-# Installs the Open-DAM panel into Premiere Pro (macOS).
+# Installs the Collaborate panel into Premiere Pro (macOS).
 #
 # CEP extensions live in ~/Library/Application Support/Adobe/CEP/extensions.
 # The panel is unsigned, so PlayerDebugMode must be enabled for the CSXS
@@ -8,8 +8,8 @@
 
 set -euo pipefail
 
-SRC="$(cd "$(dirname "$0")/../cep/com.opendam.panel" && pwd)"
-DEST="$HOME/Library/Application Support/Adobe/CEP/extensions/com.opendam.panel"
+SRC="$(cd "$(dirname "$0")/../cep/com.collaborate.panel" && pwd)"
+DEST="$HOME/Library/Application Support/Adobe/CEP/extensions/com.collaborate.panel"
 
 mkdir -p "$(dirname "$DEST")"
 rm -rf "$DEST"
@@ -23,4 +23,4 @@ killall cfprefsd 2>/dev/null || true
 
 echo "Installed to: $DEST"
 echo
-echo "Now (re)start Premiere Pro and open:  Window > Extensions > Open-DAM"
+echo "Now (re)start Premiere Pro and open:  Window > Extensions > Collaborate"

@@ -2,8 +2,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from opendam import locking
-from opendam.errors import LockHeldError
+from collaborate import locking
+from collaborate.errors import LockHeldError
 
 
 def test_claim_then_second_claim_fails(alice, bob):
@@ -22,7 +22,7 @@ def test_release_then_reclaim(alice, bob):
     identity = locking.current_identity(alice)
     locking.release_lock(alice, project_a, identity)
 
-    from opendam import git_ops
+    from collaborate import git_ops
     git_ops.add(alice, [str(locking.lock_path_for(project_a))])
     git_ops.commit(alice, "release")
     git_ops.push(alice)

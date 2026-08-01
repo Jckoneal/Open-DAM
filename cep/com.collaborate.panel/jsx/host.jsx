@@ -1,4 +1,4 @@
-// ExtendScript bridge for the Open-DAM panel. Runs inside Premiere Pro's
+// ExtendScript bridge for the Collaborate panel. Runs inside Premiere Pro's
 // scripting engine, so it can do the things an external CLI can't: open a
 // project, and save + close it programmatically before check-in.
 //

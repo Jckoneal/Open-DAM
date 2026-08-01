@@ -7,6 +7,6 @@ build/
 dist/
 
 # per-machine config — never shared via git
-.damconfig.yaml
+.collabconfig.yaml
 
 .claude/

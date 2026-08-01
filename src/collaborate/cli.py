@@ -9,27 +9,27 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from opendam import config as config_mod
-from opendam import git_ops
-from opendam import locking
-from opendam import projects as projects_mod
-from opendam import tickets as tickets_mod
-from opendam.errors import (
+from collaborate import config as config_mod
+from collaborate import git_ops
+from collaborate import locking
+from collaborate import projects as projects_mod
+from collaborate import tickets as tickets_mod
+from collaborate.errors import (
     DirtyWorkingTreeError,
     LockHeldError,
     OpenDamError,
     ProjectNotFoundError,
 )
-from opendam.launcher import get_launcher
+from collaborate.launcher import get_launcher
 
 app = typer.Typer(help="Git-based checkout manager for Adobe Premiere Pro projects.")
 console = Console()
 
 
 def _repo(ctx_path: Optional[str] = None) -> Path:
-    """Resolve and validate the DAM repo, returning its root. Guards every
+    """Resolve and validate the project library, returning its root. Guards every
     command against running somewhere that isn't a git repo at all (e.g.
-    `dam init` from the home directory), which would otherwise surface as a
+    `collab init` from the home directory), which would otherwise surface as a
     confusing GitCommandError from whatever git call happens to run first."""
     path = Path(ctx_path or Path.cwd()).resolve()
     if not path.exists():
@@ -37,8 +37,8 @@ def _repo(ctx_path: Optional[str] = None) -> Path:
     result = git_ops.run_git(["rev-parse", "--show-toplevel"], path, check=False)
     if not result.ok:
         _fail(
-            f"'{path}' is not inside a DAM git repo — cd into your cloned repo or pass --repo. "
-            f"To set one up: 'dam clone <remote-url>'.\n(git said: {result.stderr.strip()})"
+            f"'{path}' is not inside a project library (a git repo) — cd into your cloned repo or pass --repo. "
+            f"To set one up: 'collab clone <remote-url>'.\n(git said: {result.stderr.strip()})"
         )
     return Path(result.stdout.strip())
 
@@ -80,8 +80,8 @@ def _push_with_retry(repo_path: Path) -> None:
 
 
 @app.command()
-def init(repo: str = typer.Option(".", help="Path to the DAM git repo")) -> None:
-    """Interactive wizard: git identity, media root, Premiere discovery -> .damconfig.yaml"""
+def init(repo: str = typer.Option(".", help="Path to the project library (a git repo)")) -> None:
+    """Interactive wizard: git identity, media root, Premiere discovery -> .collabconfig.yaml"""
     repo_path = _repo(repo)
     cfg = config_mod.Config.load(repo_path)
 
@@ -115,7 +115,7 @@ def init(repo: str = typer.Option(".", help="Path to the DAM git repo")) -> None
         cfg.premiere.app_path = _clean_path_input(manual)
 
     template = typer.prompt(
-        "Path to a template .prproj for 'dam new' (leave blank to skip)",
+        "Path to a template .prproj for 'collab new' (leave blank to skip)",
         default=cfg.template_path or "",
     )
     cfg.template_path = _clean_path_input(template)
@@ -145,14 +145,14 @@ def _ensure_gitignored(repo_path: Path) -> None:
 
 @app.command()
 def clone(remote_url: str, dir: Optional[str] = typer.Option(None, "--dir")) -> None:
-    """Clone the DAM repo and set up local config."""
+    """Clone the project library and set up local config."""
     dest = Path(dir).resolve() if dir else Path.cwd() / Path(remote_url).stem
     git_ops.clone(remote_url, dest)
     cfg = config_mod.Config.load(dest)
     cfg.remote = remote_url
     cfg.save(dest)
     _ensure_gitignored(dest)
-    console.print(f"[green]Cloned into {dest}[/green]. Run 'dam init' inside it next.")
+    console.print(f"[green]Cloned into {dest}[/green]. Run 'collab init' inside it next.")
 
 
 def _resolve_new_path(repo_path: Path, name: str) -> Path:
@@ -191,7 +191,7 @@ def _print_open_tickets(target_path: Path) -> None:
 def _claim_and_launch(repo_path: Path, target_path: Path, cfg: "config_mod.Config", no_launch: bool) -> None:
     lock = locking.claim_lock(repo_path, target_path)
     console.print(f"[green]Checked out {target_path.stem}[/green] — locked by you as of {lock.locked_at}.")
-    console.print(f"Run 'dam checkin {target_path.stem}' when done.")
+    console.print(f"Run 'collab checkin {target_path.stem}' when done.")
     _print_open_tickets(target_path)
     if no_launch:
         return
@@ -200,13 +200,13 @@ def _claim_and_launch(repo_path: Path, target_path: Path, cfg: "config_mod.Confi
         launcher.launch(target_path, cfg.premiere.app_path or cfg.premiere.exe_path)
     except OpenDamError as e:
         console.print(f"[yellow]Lock acquired, but could not launch Premiere:[/yellow] {e}")
-        console.print("Run 'dam doctor' to diagnose, or open the project manually.")
+        console.print("Run 'collab doctor' to diagnose, or open the project manually.")
 
 
 @app.command()
 def new(
     name: str,
-    repo: str = typer.Option(".", help="Path to the DAM repo"),
+    repo: str = typer.Option(".", help="Path to the project library"),
     no_launch: bool = typer.Option(False, "--no-launch"),
 ) -> None:
     """Create a brand-new Premiere project, register it, and claim the lock."""
@@ -240,15 +240,15 @@ def new(
             # Stdin ran dry — a non-interactive caller (the Premiere panel)
             # that can't drive the create-it-yourself-then-confirm flow.
             _fail(
-                "No template project is configured, and 'dam new' without one needs an "
-                "interactive terminal. Set one with 'dam config set template_path <path>'."
+                "No template project is configured, and 'collab new' without one needs an "
+                "interactive terminal. Set one with 'collab config set template_path <path>'."
             )
             return
         if not confirmed:
             console.print("Aborted — nothing created.")
             return
         if not target_path.exists():
-            _fail(f"No file found at {target_path}. Save your project there and re-run 'dam new {name}'.")
+            _fail(f"No file found at {target_path}. Save your project there and re-run 'collab new {name}'.")
             return
 
     identity = locking.current_identity(repo_path)
@@ -260,11 +260,11 @@ def new(
 def import_project(
     source: str,
     name: Optional[str] = typer.Argument(None, help="Destination name inside the repo (default: source's filename)"),
-    repo: str = typer.Option(".", help="Path to the DAM repo"),
+    repo: str = typer.Option(".", help="Path to the project library"),
     move: bool = typer.Option(False, "--move", help="Remove the source file after a successful import"),
     checkout_after: bool = typer.Option(False, "--checkout", help="Claim the lock and launch Premiere after importing"),
 ) -> None:
-    """Bring an existing .prproj file under Open-DAM management."""
+    """Bring an existing .prproj file under Collaborate management."""
     repo_path = _repo(repo)
     source_path = Path(source).expanduser().resolve()
     if not source_path.exists() or source_path.suffix != ".prproj":
@@ -294,7 +294,7 @@ def import_project(
 
 @app.command(name="list")
 def list_projects(
-    repo: str = typer.Option(".", help="Path to the DAM repo"),
+    repo: str = typer.Option(".", help="Path to the project library"),
     as_json: bool = typer.Option(False, "--json", help="Machine-readable output (used by the Premiere panel)"),
 ) -> None:
     """List all projects found in the repo."""
@@ -341,7 +341,7 @@ def list_projects(
 @app.command()
 def status(
     project: Optional[str] = typer.Argument(None),
-    repo: str = typer.Option(".", help="Path to the DAM repo"),
+    repo: str = typer.Option(".", help="Path to the project library"),
 ) -> None:
     """Detailed lock + working-tree status for one project, or all if omitted."""
     repo_path = _repo(repo)
@@ -369,7 +369,7 @@ def status(
 @app.command()
 def checkout(
     project: str,
-    repo: str = typer.Option(".", help="Path to the DAM repo"),
+    repo: str = typer.Option(".", help="Path to the project library"),
     no_launch: bool = typer.Option(False, "--no-launch"),
     force: bool = typer.Option(False, "--force", help="Seize an already-locked project (admin override)"),
 ) -> None:
@@ -385,7 +385,7 @@ def checkout(
     if own_dirty:
         _fail(
             f"'{info.name}' has local uncommitted changes already — "
-            "resolve with 'dam checkin' or 'git' before checking out again."
+            "resolve with 'collab checkin' or 'git' before checking out again."
         )
         return
 
@@ -415,7 +415,7 @@ def checkout(
 @app.command()
 def checkin(
     project: str,
-    repo: str = typer.Option(".", help="Path to the DAM repo"),
+    repo: str = typer.Option(".", help="Path to the project library"),
     message: Optional[str] = typer.Option(None, "-m", "--message"),
     force_checkin: bool = typer.Option(False, "--force-checkin"),
     keep_lock: bool = typer.Option(False, "--keep-lock"),
@@ -487,7 +487,7 @@ def checkin(
 @app.command()
 def release(
     project: str,
-    repo: str = typer.Option(".", help="Path to the DAM repo"),
+    repo: str = typer.Option(".", help="Path to the project library"),
     force: bool = typer.Option(False, "--force"),
     discard_local: bool = typer.Option(False, "--discard-local"),
 ) -> None:
@@ -548,7 +548,7 @@ def _find_project(repo_path: Path, project: str) -> "projects_mod.ProjectInfo":
 def ticket_add(
     project: str,
     text: str,
-    repo: str = typer.Option(".", help="Path to the DAM repo"),
+    repo: str = typer.Option(".", help="Path to the project library"),
 ) -> None:
     """Add a ticket to a project. No checkout/lock needed."""
     repo_path = _repo(repo)
@@ -571,7 +571,7 @@ def ticket_add(
 @ticket_app.command("list")
 def ticket_list(
     project: str,
-    repo: str = typer.Option(".", help="Path to the DAM repo"),
+    repo: str = typer.Option(".", help="Path to the project library"),
     open_only: bool = typer.Option(False, "--open", help="Show only open tickets"),
 ) -> None:
     """List tickets on a project."""
@@ -604,8 +604,8 @@ def ticket_list(
 @ticket_app.command("done")
 def ticket_done(
     project: str,
-    ticket_id: str = typer.Argument(..., help="Ticket id (or unambiguous prefix) from 'dam ticket list'"),
-    repo: str = typer.Option(".", help="Path to the DAM repo"),
+    ticket_id: str = typer.Argument(..., help="Ticket id (or unambiguous prefix) from 'collab ticket list'"),
+    repo: str = typer.Option(".", help="Path to the project library"),
 ) -> None:
     """Mark a ticket as done."""
     repo_path = _repo(repo)
@@ -634,7 +634,7 @@ def ticket_done(
     console.print(f"[green]Closed ticket \\[{ticket.id}][/green]: {ticket.text}")
 
 
-config_app = typer.Typer(help="Get/set values in .damconfig.yaml")
+config_app = typer.Typer(help="Get/set values in .collabconfig.yaml")
 app.add_typer(config_app, name="config")
 
 
@@ -651,7 +651,7 @@ def config_get(key: Optional[str] = typer.Argument(None), repo: str = typer.Opti
         for part in parts:
             value = value[part] if isinstance(value, dict) else getattr(value, part)
     except (KeyError, AttributeError):
-        _fail(f"Unknown config key '{key}'. Run 'dam config get' to see available keys.")
+        _fail(f"Unknown config key '{key}'. Run 'collab config get' to see available keys.")
         return
     console.print(value)
 
@@ -676,7 +676,7 @@ def config_set(key: str, value: str, repo: str = typer.Option(".")) -> None:
     elif len(parts) == 1 and parts[0] in cfg.__dataclass_fields__:
         setattr(cfg, parts[0], value)
     else:
-        _fail(f"Unknown config key '{key}'. Run 'dam config get' to see available keys.")
+        _fail(f"Unknown config key '{key}'. Run 'collab config get' to see available keys.")
         return
 
     cfg.save(repo_path)
@@ -684,7 +684,7 @@ def config_set(key: str, value: str, repo: str = typer.Option(".")) -> None:
 
 
 @app.command()
-def doctor(repo: str = typer.Option(".", help="Path to the DAM repo")) -> None:
+def doctor(repo: str = typer.Option(".", help="Path to the project library")) -> None:
     """Diagnostics: git present, remote reachable, Premiere found, media_root exists."""
     repo_path = _repo(repo)
     cfg = config_mod.Config.load(repo_path)

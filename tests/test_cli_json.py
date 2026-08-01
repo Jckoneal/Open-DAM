@@ -2,7 +2,7 @@ import json
 
 from typer.testing import CliRunner
 
-from opendam.cli import app
+from collaborate.cli import app
 
 runner = CliRunner()
 

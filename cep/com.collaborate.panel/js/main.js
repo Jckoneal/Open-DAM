@@ -1,7 +1,7 @@
-/* Open-DAM Premiere panel.
+/* Collaborate Premiere panel.
  *
  * Architecture: this JS runs in the CEP browser context with Node enabled.
- * All DAM logic stays in the `dam` CLI (spawned via child_process); all
+ * All Collaborate logic stays in the `collab` CLI (spawned via child_process); all
  * Premiere-side actions (open/save/close project) go through the
  * ExtendScript bridge in jsx/host.jsx via evalScript. The panel itself is
  * just glue and rendering — it holds no lock logic of its own.
@@ -25,14 +25,14 @@ function evalScript(script) {
 
 function getSettings() {
   return {
-    repoPath: localStorage.getItem("odam.repoPath") || "",
-    damPath: localStorage.getItem("odam.damPath") || "",
+    repoPath: localStorage.getItem("collaborate.repoPath") || "",
+    collabPath: localStorage.getItem("collaborate.collabPath") || "",
   };
 }
 
-function saveSettingsValues(repoPath, damPath) {
-  localStorage.setItem("odam.repoPath", repoPath);
-  localStorage.setItem("odam.damPath", damPath);
+function saveSettingsValues(repoPath, collabPath) {
+  localStorage.setItem("collaborate.repoPath", repoPath);
+  localStorage.setItem("collaborate.collabPath", collabPath);
 }
 
 function normalizePathInput(raw) {
@@ -45,22 +45,22 @@ function normalizePathInput(raw) {
   return p;
 }
 
-function detectDamPath() {
+function detectCollabPath() {
   // -i so .zshrc is read too: conda/pyenv put their PATH setup there, and a
   // plain login shell (-l) misses it, which made auto-detect silently fail.
   return new Promise(function (resolve) {
     cp.exec(
-      "/bin/zsh -ilc 'command -v dam' 2>/dev/null",
+      "/bin/zsh -ilc 'command -v collab' 2>/dev/null",
       { timeout: 8000 },
       function (err, stdout) {
         var lines = (stdout || "").trim().split("\n").filter(Boolean);
         var found = lines.length ? lines[lines.length - 1] : "";
         if (found && fs.existsSync(found)) return resolve(found);
         var candidates = [
-          (process.env.HOME || "") + "/.local/bin/dam",
-          "/opt/homebrew/bin/dam",
-          "/opt/homebrew/Caskroom/miniconda/base/bin/dam",
-          "/usr/local/bin/dam",
+          (process.env.HOME || "") + "/.local/bin/collab",
+          "/opt/homebrew/bin/collab",
+          "/opt/homebrew/Caskroom/miniconda/base/bin/collab",
+          "/usr/local/bin/collab",
         ];
         for (var i = 0; i < candidates.length; i++) {
           if (fs.existsSync(candidates[i])) return resolve(candidates[i]);
@@ -71,39 +71,39 @@ function detectDamPath() {
   });
 }
 
-function validateSettings(repoPath, damPath) {
+function validateSettings(repoPath, collabPath) {
   if (!repoPath) return "Enter your project library folder (the cloned team repo).";
   if (!fs.existsSync(repoPath)) return "Library folder not found: " + repoPath;
   if (!fs.existsSync(repoPath + "/.git")) {
-    return repoPath + " isn't a project library (no .git inside). It should be the folder you got from 'dam clone'.";
+    return repoPath + " isn't a project library (no .git inside). It should be the folder you got from 'collab clone'.";
   }
-  if (damPath) {
-    if (!fs.existsSync(damPath)) return "dam not found at: " + damPath;
-    if (fs.statSync(damPath).isDirectory()) {
-      return "That's a folder, not the dam program itself. It's usually .../bin/dam — or leave the field blank to auto-detect.";
+  if (collabPath) {
+    if (!fs.existsSync(collabPath)) return "collab not found at: " + collabPath;
+    if (fs.statSync(collabPath).isDirectory()) {
+      return "That's a folder, not the collab program itself. It's usually .../bin/collab — or leave the field blank to auto-detect.";
     }
   }
   return "";
 }
 
-/* ---------- running dam ---------- */
+/* ---------- running collab ---------- */
 
 function runDam(args) {
   var s = getSettings();
   return new Promise(function (resolve, reject) {
-    if (!s.damPath) return reject(new Error("dam command not configured"));
+    if (!s.collabPath) return reject(new Error("collab command not configured"));
     if (!s.repoPath) return reject(new Error("project library folder not configured"));
     cp.execFile(
-      s.damPath,
+      s.collabPath,
       args.concat(["--repo", s.repoPath]),
       { timeout: 120000 },
       function (err, stdout, stderr) {
         if (err) {
           var detail = ((stdout || "") + (stderr || "")).trim();
           if (!detail && err.code === "EACCES") {
-            detail = "the configured dam path isn't an executable program (" + s.damPath + ") — check Settings";
+            detail = "the configured collab path isn't an executable program (" + s.collabPath + ") — check Settings";
           } else if (!detail && err.code === "ENOENT") {
-            detail = "dam not found at " + s.damPath + " — check Settings";
+            detail = "collab not found at " + s.collabPath + " — check Settings";
           }
           reject(new Error(detail || err.message));
         } else {
@@ -135,7 +135,7 @@ function showSetup(errorMsg) {
   el("setup").classList.remove("hidden");
   var s = getSettings();
   el("repoPath").value = s.repoPath;
-  el("damPath").value = s.damPath;
+  el("collabPath").value = s.collabPath;
   el("setupError").textContent = errorMsg || "";
 }
 
@@ -224,7 +224,7 @@ function refresh(silent) {
       showMain();
     })
     .catch(function (e) {
-      showSetup("Could not talk to dam: " + e.message);
+      showSetup("Could not talk to collab: " + e.message);
     });
 }
 
@@ -321,19 +321,19 @@ document.addEventListener("DOMContentLoaded", function () {
   el("settings").addEventListener("click", function () { showSetup(""); });
   el("saveSettings").addEventListener("click", function () {
     var repoPath = normalizePathInput(el("repoPath").value);
-    var damPath = normalizePathInput(el("damPath").value);
+    var collabPath = normalizePathInput(el("collabPath").value);
 
-    var err = validateSettings(repoPath, damPath);
+    var err = validateSettings(repoPath, collabPath);
     if (err) {
       el("setupError").textContent = err;
       return;
     }
-    var resolveDam = damPath ? Promise.resolve(damPath) : detectDamPath();
+    var resolveDam = collabPath ? Promise.resolve(collabPath) : detectCollabPath();
     resolveDam.then(function (dp) {
       if (!dp) {
         el("setupError").textContent =
-          "Couldn't find the dam command automatically. In Terminal, run " +
-          "'command -v dam' and paste the result here.";
+          "Couldn't find the collab command automatically. In Terminal, run " +
+          "'command -v collab' and paste the result here.";
         return;
       }
       saveSettingsValues(repoPath, dp);
@@ -343,15 +343,15 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   var s = getSettings();
-  var boot = s.damPath
+  var boot = s.collabPath
     ? Promise.resolve()
-    : detectDamPath().then(function (found) {
-        if (found) localStorage.setItem("odam.damPath", found);
+    : detectCollabPath().then(function (found) {
+        if (found) localStorage.setItem("collaborate.collabPath", found);
       });
 
   boot.then(function () {
     var ready = getSettings();
-    if (!ready.repoPath || !ready.damPath) {
+    if (!ready.repoPath || !ready.collabPath) {
       showSetup("");
     } else {
       refresh(false);

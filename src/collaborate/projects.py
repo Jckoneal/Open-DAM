@@ -1,4 +1,4 @@
-"""Discovers *.prproj files (and their sibling lock files) in a DAM repo."""
+"""Discovers *.prproj files (and their sibling lock files) in a project library."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from opendam.errors import ProjectNotFoundError
-from opendam.locking import Lock, lock_path_for
+from collaborate.errors import ProjectNotFoundError
+from collaborate.locking import Lock, lock_path_for
 
 AUTOSAVE_DIR_PREFIX = "Adobe Premiere Pro Auto-Save"
 
@@ -22,7 +22,7 @@ _PREMIERE_COPY_RE = re.compile(
 def is_premiere_artifact(repo: Path, prproj: Path) -> bool:
     """True for files Premiere generates on its own (auto-saves, rescue
     copies) rather than projects anyone deliberately created — these must
-    never show up in dam list or be lockable."""
+    never show up in collab list or be lockable."""
     if any(part.startswith(AUTOSAVE_DIR_PREFIX) for part in prproj.relative_to(repo).parts[:-1]):
         return True
     return bool(_PREMIERE_COPY_RE.search(prproj.stem))
@@ -63,4 +63,4 @@ def find(repo: Path, name: str) -> ProjectInfo:
         raise ProjectNotFoundError(
             f"Multiple projects named '{name}' — specify the full relative path: {options}"
         )
-    raise ProjectNotFoundError(f"No project named '{name}' found. Run 'dam list' to see available projects.")
+    raise ProjectNotFoundError(f"No project named '{name}' found. Run 'collab list' to see available projects.")

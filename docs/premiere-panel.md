@@ -1,6 +1,6 @@
-# The Open-DAM Premiere Pro panel
+# The Collaborate Premiere Pro panel
 
-A panel that lives inside Premiere Pro (**Window → Extensions → Open-DAM**) so
+A panel that lives inside Premiere Pro (**Window → Extensions → Collaborate**) so
 editors can check projects out and in without touching the Terminal after
 one-time setup.
 
@@ -27,18 +27,18 @@ to the team library in one step.
 ## Requirements
 
 - macOS with Premiere Pro 2022 or newer.
-- The `dam` CLI installed and the team library cloned + `dam init` run
+- The `collab` CLI installed and the team library cloned + `collab init` run
   (see the [Getting Started guide](getting-started.md), Part 1).
 
 ## Install
 
-From a clone of this (Open-DAM) repository:
+From a clone of this (Collaborate) repository:
 
 ```bash
 ./scripts/install-premiere-panel.sh
 ```
 
-Then restart Premiere Pro and open **Window → Extensions → Open-DAM**.
+Then restart Premiere Pro and open **Window → Extensions → Collaborate**.
 
 The script copies the panel into `~/Library/Application Support/Adobe/CEP/extensions/`
 and enables `PlayerDebugMode` — the panel is unsigned, and Premiere refuses to
@@ -51,8 +51,8 @@ The first time it opens, the panel asks for two paths:
 
 - **Project library folder** — where you cloned the team repo
   (e.g. `/Users/you/Premiere-Projects`).
-- **Path to the dam command** — usually auto-detected; only fill it in if the
-  panel says it can't find `dam`. (`command -v dam` in Terminal prints it.)
+- **Path to the collab command** — usually auto-detected; only fill it in if the
+  panel says it can't find `collab`. (`command -v collab` in Terminal prints it.)
 
 Settings are per-machine, stored by the panel itself, and reachable later via
 the gear button.
@@ -61,19 +61,19 @@ the gear button.
 
 ```
 ┌────────────────────────── Premiere Pro ──────────────────────────┐
-│  ┌───────────── Open-DAM panel (CEP, HTML/JS) ─────────────┐     │
-│  │  main.js ──child_process──▶ dam CLI ──▶ git repo/locks  │     │
+│  ┌───────────── Collaborate panel (CEP, HTML/JS) ─────────────┐     │
+│  │  main.js ──child_process──▶ collab CLI ──▶ git repo/locks  │     │
 │  │  main.js ──evalScript────▶ jsx/host.jsx (ExtendScript)  │     │
 │  │                            open / save / close project  │     │
 │  └──────────────────────────────────────────────────────────┘    │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-All locking/git logic stays in the CLI — the panel shells out to `dam` with
+All locking/git logic stays in the CLI — the panel shells out to `collab` with
 `--json`/`--yes` flags (added for exactly this) and never reimplements any of
 it. Premiere-side actions go through four small ExtendScript functions in
-[jsx/host.jsx](../cep/com.opendam.panel/jsx/host.jsx). The panel source lives in
-[cep/com.opendam.panel/](../cep/com.opendam.panel/).
+[jsx/host.jsx](../cep/com.collaborate.panel/jsx/host.jsx). The panel source lives in
+[cep/com.collaborate.panel/](../cep/com.collaborate.panel/).
 
 Known limitations:
 
@@ -85,11 +85,11 @@ Known limitations:
 - **CEP, not UXP.** Adobe is migrating extensions to UXP; CEP still works in
   current Premiere releases, but a UXP port will eventually be needed. Note a
   UXP port is not a quick swap: UXP plugins can't spawn external processes, so
-  the panel couldn't shell out to `dam` — it would need a small local service
-  (e.g. `dam serve`) that the plugin talks to over localhost instead.
+  the panel couldn't shell out to `collab` — it would need a small local service
+  (e.g. `collab serve`) that the plugin talks to over localhost instead.
 - **Unsigned** — needs PlayerDebugMode (the install script handles it).
 - **New… requires a template.** Without a `template_path`, creating projects
-  still needs the CLI flow (`dam new` in Terminal), which walks you through
+  still needs the CLI flow (`collab new` in Terminal), which walks you through
   saving the project manually.
 - **macOS only for now**, same as the launcher.
 - If Premiere is closed mid-edit without checking in, the lock stays held —
