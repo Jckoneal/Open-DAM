@@ -104,7 +104,15 @@ class OpenDamMenuBarApp(rumps.App):
         self.settings.save()
 
     @property
-    def repo_path(self) -> Path:
+    def repo_path(self) -> Optional[Path]:
+        # Must never raise: rumps' internal callback dispatch
+        # (call_as_function_or_method) does inspect.getmembers(app,
+        # predicate=inspect.ismethod) before invoking ANY callback, which
+        # evaluates every property via getattr — including this one. A
+        # raising property here breaks every menu click and timer tick
+        # app-wide, not just code paths that actually read repo_path.
+        if not self.settings.repo_path:
+            return None
         return Path(self.settings.repo_path)
 
     # ---------- refresh / rendering ----------
