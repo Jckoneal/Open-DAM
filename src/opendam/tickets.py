@@ -61,8 +61,15 @@ def load_all(project_file: Path) -> list[Ticket]:
     tdir = tickets_dir_for(project_file)
     if not tdir.is_dir():
         return []
-    tickets = [Ticket.load(p) for p in tdir.glob("*.json")]
-    return sorted(tickets, key=lambda t: t.created_at)
+    # created_at (from locking.utcnow_iso) only has whole-second resolution,
+    # so two tickets added within the same second tie there; without a
+    # tiebreaker, sort order falls back to filesystem glob order, which is
+    # OS-dependent, not creation order. File mtime has sub-second resolution
+    # on any filesystem we run on and reflects real write order, since each
+    # `dam ticket add` writes its file synchronously before returning.
+    pairs = [(Ticket.load(p), p.stat().st_mtime) for p in tdir.glob("*.json")]
+    pairs.sort(key=lambda pair: (pair[0].created_at, pair[1]))
+    return [ticket for ticket, _mtime in pairs]
 
 
 def open_tickets(project_file: Path) -> list[Ticket]:
