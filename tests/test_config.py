@@ -1,12 +1,12 @@
-from opendam.config import Config
+from collaborate.config import Config
 
 
 def test_load_recovers_from_legacy_bare_premiere_string(tmp_path):
-    """`dam config set premiere <path>` used to overwrite the whole `premiere`
+    """`collab config set premiere <path>` used to overwrite the whole `premiere`
     section with a plain string instead of a mapping, which crashed every
     later Config.load() with `PremiereConfig() argument after ** must be a
     mapping, not str`. Loading must tolerate an already-corrupted file."""
-    (tmp_path / ".damconfig.yaml").write_text(
+    (tmp_path / ".collabconfig.yaml").write_text(
         "schema_version: 1\n"
         "remote: null\n"
         "media_root: null\n"
@@ -18,7 +18,7 @@ def test_load_recovers_from_legacy_bare_premiere_string(tmp_path):
 
 
 def test_load_ignores_unknown_premiere_keys(tmp_path):
-    (tmp_path / ".damconfig.yaml").write_text(
+    (tmp_path / ".collabconfig.yaml").write_text(
         "premiere:\n  app_path: /some/path\n  future_field: surprise\n"
     )
     cfg = Config.load(tmp_path)

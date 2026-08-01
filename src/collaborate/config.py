@@ -1,6 +1,6 @@
-"""Per-machine `.damconfig.yaml` at the DAM repo root. Gitignored — it travels
-with a given clone, not with the shared history, since remote URL access
-method and local paths differ per person's machine."""
+"""Per-machine `.collabconfig.yaml` at the project library root. Gitignored —
+it travels with a given clone, not with the shared history, since remote URL
+access method and local paths differ per person's machine."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from typing import Optional
 
 import yaml
 
-CONFIG_FILENAME = ".damconfig.yaml"
+CONFIG_FILENAME = ".collabconfig.yaml"
 DEFAULT_STALE_LOCK_HOURS = 24
 
 
@@ -40,7 +40,7 @@ class Config:
         raw = yaml.safe_load(path.read_text()) or {}
         premiere_raw = raw.pop("premiere", {}) or {}
         if isinstance(premiere_raw, str):
-            # Recovers from a pre-fix `dam config set premiere <path>` (the
+            # Recovers from a pre-fix `collab config set premiere <path>` (the
             # bare key, not `premiere.app_path`), which used to overwrite
             # this whole section with a plain string instead of a mapping.
             premiere_raw = {"app_path": premiere_raw}

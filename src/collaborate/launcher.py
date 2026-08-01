@@ -14,7 +14,7 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
-from opendam.errors import PremiereNotFoundError
+from collaborate.errors import PremiereNotFoundError
 
 
 def _require_app_path(app_path: Optional[str], hint: str) -> str:
@@ -41,11 +41,11 @@ class Launcher:
 
 class MacLauncher(Launcher):
     def launch(self, prproj_path: Path, app_path: Optional[str]) -> None:
-        app_path = _require_app_path(app_path, "Run 'dam init' or 'dam config set premiere.app_path <path>'.")
+        app_path = _require_app_path(app_path, "Run 'collab init' or 'collab config set premiere.app_path <path>'.")
         subprocess.run(["open", "-a", app_path, str(prproj_path)], check=True)
 
     def launch_blank(self, app_path: Optional[str]) -> None:
-        app_path = _require_app_path(app_path, "Run 'dam init' or 'dam config set premiere.app_path <path>'.")
+        app_path = _require_app_path(app_path, "Run 'collab init' or 'collab config set premiere.app_path <path>'.")
         subprocess.run(["open", "-a", app_path], check=True)
 
     def is_running(self) -> bool:
@@ -59,11 +59,11 @@ class WindowsLauncher(Launcher):
     """Phase 2 — not yet implemented/validated on real Windows hardware."""
 
     def launch(self, prproj_path: Path, app_path: Optional[str]) -> None:
-        app_path = _require_app_path(app_path, "Run 'dam config set premiere.exe_path <path>'.")
+        app_path = _require_app_path(app_path, "Run 'collab config set premiere.exe_path <path>'.")
         subprocess.run([app_path, str(prproj_path)], check=True)
 
     def launch_blank(self, app_path: Optional[str]) -> None:
-        app_path = _require_app_path(app_path, "Run 'dam config set premiere.exe_path <path>'.")
+        app_path = _require_app_path(app_path, "Run 'collab config set premiere.exe_path <path>'.")
         subprocess.run([app_path], check=True)
 
     def is_running(self) -> bool:
@@ -79,4 +79,4 @@ def get_launcher() -> Launcher:
         return MacLauncher()
     if system == "Windows":
         return WindowsLauncher()
-    raise NotImplementedError(f"Open-DAM does not support launching Premiere on {system}")
+    raise NotImplementedError(f"Collaborate does not support launching Premiere on {system}")
