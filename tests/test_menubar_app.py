@@ -104,3 +104,26 @@ def test_async_finished_dispatches_by_kind_and_always_refreshes(tmp_path, monkey
     app._async_finished(("alert", "Open-DAM", "oops"))
     assert calls == [("alert", ("Open-DAM", "oops"))]
     assert app._busy is False
+
+
+def test_refresh_still_runs_when_notification_itself_raises(monkeypatch):
+    """Regression: rumps.notification can fail outright when not running
+    from a real .app bundle ("missing CFBundleIdentifier" — a real error
+    seen in the field). That must not swallow the refresh() call after it —
+    otherwise a checkout/checkin that genuinely succeeded never shows up
+    as such in the menu, looking indistinguishable from having failed."""
+    def raises(*_a):
+        raise RuntimeError("Failed to setup the notification center")
+
+    monkeypatch.setattr(menubar_app.rumps, "notification", raises)
+    refreshed = []
+
+    app = menubar_app.OpenDamMenuBarApp()
+    app.settings = AppSettings(repo_path=None)
+    monkeypatch.setattr(app, "refresh", lambda: refreshed.append(True))
+    app._busy = True
+
+    app._async_finished(("notify", "Open-DAM", "MyProject", "Checked out"))
+
+    assert refreshed == [True]
+    assert app._busy is False

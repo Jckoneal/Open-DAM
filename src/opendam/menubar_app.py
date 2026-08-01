@@ -208,9 +208,19 @@ class OpenDamMenuBarApp(rumps.App):
         self.title = TITLE
         if present:
             kind, *args = present
-            if kind == "alert":
-                _activate()
-            (rumps.alert if kind == "alert" else rumps.notification)(*args)
+            try:
+                if kind == "alert":
+                    _activate()
+                (rumps.alert if kind == "alert" else rumps.notification)(*args)
+            except Exception as e:
+                # Showing the result is best-effort — e.g. rumps.notification
+                # can fail entirely when not running from a real .app bundle
+                # ("missing CFBundleIdentifier"). The underlying git/lock
+                # operation already succeeded or failed for real by this
+                # point; refresh() below must still run either way, or the
+                # menu silently stops reflecting reality (looks like
+                # "checkout didn't happen" when it actually did).
+                print(f"Open-DAM: could not show {kind}: {e}")
         self.refresh()
 
     def _make_checkout(self, entry: ProjectEntry):
