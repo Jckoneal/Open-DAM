@@ -19,6 +19,7 @@ from typing import Optional
 
 import rumps
 from AppKit import NSApplication, NSApplicationActivationPolicyAccessory
+from PyObjCTools import AppHelper
 
 from opendam import config as config_mod
 from opendam import git_ops
@@ -173,33 +174,44 @@ class OpenDamMenuBarApp(rumps.App):
             item.set_callback(None)
         return item
 
-    # ---------- actions (run off the main thread so git/network calls never freeze the bar) ----------
+    # ---------- actions (git/network work off the main thread so it can't freeze the bar) ----------
 
     def _run_async(self, fn) -> None:
+        """Run fn() on a background thread — but fn() must be pure git/lock
+        work and return a presenter tuple describing what to show
+        afterward, never touch rumps/AppKit itself. AppKit enforces
+        main-thread-only UI access (confirmed by real crashes: "NSWindow
+        should only be instantiated on the main thread", layout-engine
+        corruption warnings) — building menu items, alerts, and
+        notifications all have to happen back on the main thread, which is
+        what AppHelper.callAfter marshals this to."""
         if self._busy:
             return
         self._busy = True
         self.title = TITLE + " ⋯"  # busy indicator
 
         def worker():
-            # NOTE: the rumps.alert() calls below run on this background
-            # thread, which isn't a fully-supported AppKit pattern (UI work
-            # is meant to happen on the main thread). In practice this has
-            # worked without crashing in manual testing so far, but a
-            # cleaner version would marshal these back to the main thread
-            # instead — flagging as a known follow-up, not fixed here.
+            present = None
             try:
-                fn()
+                present = fn()
             except OpenDamError as e:
-                rumps.alert("Open-DAM", str(e))
+                present = ("alert", "Open-DAM", str(e))
             except Exception as e:  # pragma: no cover - unexpected, still shouldn't crash the app
-                rumps.alert("Open-DAM — unexpected error", str(e))
-            finally:
-                self._busy = False
-                self.title = TITLE
-                self.refresh()
+                present = ("alert", "Open-DAM — unexpected error", str(e))
+            AppHelper.callAfter(self._async_finished, present)
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def _async_finished(self, present) -> None:
+        """Runs on the main thread via AppHelper.callAfter."""
+        self._busy = False
+        self.title = TITLE
+        if present:
+            kind, *args = present
+            if kind == "alert":
+                _activate()
+            (rumps.alert if kind == "alert" else rumps.notification)(*args)
+        self.refresh()
 
     def _make_checkout(self, entry: ProjectEntry):
         def handler(_sender):
@@ -210,9 +222,8 @@ class OpenDamMenuBarApp(rumps.App):
                 try:
                     get_launcher().launch(entry.path, app_path)
                 except OpenDamError as e:
-                    rumps.alert("Open-DAM", f"Checked out {entry.name}, but couldn't launch Premiere: {e}")
-                    return
-                rumps.notification("Open-DAM", entry.name, f"Checked out — locked by you as of {lock.locked_at}")
+                    return ("alert", "Open-DAM", f"Checked out {entry.name}, but couldn't launch Premiere: {e}")
+                return ("notify", "Open-DAM", entry.name, f"Checked out — locked by you as of {lock.locked_at}")
 
             self._run_async(do)
 
@@ -241,7 +252,7 @@ class OpenDamMenuBarApp(rumps.App):
                 if not result.ok and "nothing to commit" not in result.stdout.lower():
                     raise OpenDamError(f"commit failed: {result.stderr}")
                 git_ops.push_with_retry(self.repo_path)
-                rumps.notification("Open-DAM", entry.name, "Checked in and released.")
+                return ("notify", "Open-DAM", entry.name, "Checked in and released.")
 
             self._run_async(do)
 
@@ -265,7 +276,7 @@ class OpenDamMenuBarApp(rumps.App):
                 git_ops.add(self.repo_path, [str(locking.lock_path_for(entry.path))])
                 git_ops.commit(self.repo_path, f"release: {entry.name} by {identity['user']}")
                 git_ops.push_with_retry(self.repo_path)
-                rumps.notification("Open-DAM", entry.name, "Released.")
+                return ("notify", "Open-DAM", entry.name, "Released.")
 
             self._run_async(do)
 
