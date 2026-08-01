@@ -1,6 +1,6 @@
 # Open-DAM
 
-A Git-based checkout manager for Adobe Premiere Pro projects.
+A Git-based checkout manager for Adobe Premiere Pro projects with local media storage so teams can work together without spending thousands on a Digital Asset Manager.
 
 Premiere Pro project files (`.prproj`) can't be merged the way text files can. If two
 editors modify the same project on different machines, there's no reconciling the
