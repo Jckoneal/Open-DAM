@@ -48,15 +48,7 @@ def _fail(message: str) -> None:
     raise typer.Exit(code=1)
 
 
-def _clean_path_input(raw: str) -> Optional[str]:
-    """Normalize a path the user typed or dragged into the terminal: shell
-    escapes (`Jacks\\ SSD\\ 2`), surrounding quotes, stray whitespace, and
-    `~` all arrive verbatim from a prompt and would fail existence checks
-    if stored as-is."""
-    cleaned = raw.strip().strip("'\"").replace("\\ ", " ").strip()
-    if not cleaned:
-        return None
-    return str(Path(cleaned).expanduser())
+_clean_path_input = config_mod.clean_path_input
 
 
 def _push_with_retry(repo_path: Path) -> None:

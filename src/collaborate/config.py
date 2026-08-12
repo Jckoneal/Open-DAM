@@ -81,6 +81,17 @@ class Config:
         path.write_text(yaml.safe_dump(data, sort_keys=False))
 
 
+def clean_path_input(raw: str) -> Optional[str]:
+    """Normalize a path typed or dragged into a terminal prompt or GUI text
+    field: shell escapes (`Jacks\\ SSD\\ 2`), surrounding quotes, stray
+    whitespace, and `~` all arrive verbatim and would fail existence checks
+    if stored as-is."""
+    cleaned = raw.strip().strip("'\"").replace("\\ ", " ").strip()
+    if not cleaned:
+        return None
+    return str(Path(cleaned).expanduser())
+
+
 def discover_premiere_macos() -> list[str]:
     """Glob /Applications for installed Premiere Pro versions."""
     candidates = sorted(glob.glob("/Applications/Adobe Premiere Pro*/Adobe Premiere Pro*.app"))

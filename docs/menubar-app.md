@@ -21,7 +21,7 @@ needed for day-to-day use once it's set up.
  ├ ─────────────
  ├ New Project…                ⌘N
  ├ Sync Now                    ⌘R
- ├ Settings…                   ⌘,
+ ├ Settings ▸
  └ Quit Collaborate            ⌘Q
 ```
 
@@ -42,11 +42,14 @@ hooks — see [the Premiere panel](premiere-panel.md) for that piece if you use 
 
 ## Requirements
 
-macOS and, for the CLI-installed route below, your Mac's login `git`
-identity configured. Either way, the project library needs to already be
-cloned + `collab init` run once (see the
-[Getting Started guide](getting-started.md)) — the packaged app's first-run
-dialog handles the clone-folder part, but not cloning itself.
+macOS, and the project library needs to already be cloned (see
+[Getting Started](getting-started.md), or just `git clone <remote-url>`
+yourself) — the app's first-run dialog handles pointing at that folder, but
+not the clone itself. Everything else that used to need `collab init`/`collab
+config set` from a terminal — git identity, media root, Premiere's path, the
+new-project template, stale-lock threshold — is covered by the **Settings ▸**
+submenu below (see ["Using it"](#using-it)), so a terminal is optional even
+for first-time setup, not just day-to-day use.
 
 ## Install — packaged app (no Python needed)
 
@@ -135,15 +138,35 @@ elapsed time and a stale warning (⚠) if you've held it past
   an admin can `collab release <project> --force` from the Terminal.
 
 **Elsewhere in the menu:**
-- **New Project…** (⌘N) — only works if a `template_path` is configured
-  (`collab config set template_path <path>`); creates from it, commits,
-  pushes, and checks it out to you in one step. Without a template configured,
-  it tells you to use `collab new <name>` in Terminal instead — that flow
-  needs to wait for you to manually save a new project in Premiere, which
-  doesn't fit a single menu click.
+- **New Project…** (⌘N) — only works if a template is configured (via
+  **Settings ▸ New Project Template…**, or already bundled in the packaged
+  app — see below); creates from it, commits, pushes, and checks it out to
+  you in one step. Without a template configured, it tells you to use `collab
+  new <name>` in Terminal instead — that flow needs to wait for you to
+  manually save a new project in Premiere, which doesn't fit a single menu
+  click.
 - **Sync Now** (⌘R) — refresh immediately instead of waiting for the
   automatic 30-second cycle.
-- **Settings…** (⌘,) — change which project library folder this machine points at.
+- **Settings ▸** — everything `collab init`/`collab config set` used to
+  cover from a terminal:
+  - **Library Folder…** — which project library folder this machine points at.
+  - **Git Identity (Email)…** — your git `user.email`, used to attribute
+    checkouts/checkins to you; sets it globally (`git config --global`), same
+    as `collab init`.
+  - **Media Root…** — your local media root path.
+  - **Premiere Pro App…** — path to Premiere Pro; pre-fills an
+    auto-detected install the same way `collab init` does, if one isn't
+    already configured.
+  - **New Project Template…** — the `.prproj` "New Project…" creates from.
+  - **Stale Lock Hours…** — how long a lock can be held before it's flagged
+    ⚠ for others.
+
+  Each opens a single text-field prompt pre-filled with its current value —
+  clear the field and save to unset it. These write to the same
+  `.collabconfig.yaml` (or, for git identity, the same global git config)
+  that `collab config get`/`collab init` read and write, so the two stay
+  interchangeable — set something from Terminal on one machine, see it
+  reflected in Settings on another clone, and vice versa.
 - The list also flashes "✓ *Project* free" for a couple of seconds when
   someone else's lock is released between refreshes — even if you didn't
   cause it — so you don't have to keep checking back.
@@ -201,9 +224,11 @@ Known limitations:
 - **Doesn't drive Premiere itself** — no save/close automation. Use the
   [Premiere panel](premiere-panel.md) if you want that; the two aren't
   mutually exclusive.
-- **New Project… needs a configured template.** Without one, creating a
-  project still needs the Terminal (`collab new`), which can walk you through
-  the manual-save flow interactively in a way a single menu click can't.
+- **New Project… needs a configured template** (set via **Settings ▸ New
+  Project Template…**, or bundled by default in the packaged app). Without
+  one, creating a project still needs the Terminal (`collab new`), which can
+  walk you through the manual-save flow interactively in a way a single menu
+  click can't.
 - **No OS notification center integration for the pip-installed version** —
   it needs a real `.app` bundle identity (`CFBundleIdentifier`) that a bare
   script run via the `collab` console command structurally can't have, so

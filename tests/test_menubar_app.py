@@ -498,3 +498,128 @@ def test_hotkey_registration_does_not_raise(alice):
     app = menubar_app.OpenDamMenuBarApp()
     app.settings = AppSettings(repo_path=str(alice))
     app._register_global_hotkey()  # must not raise
+
+
+def test_change_git_email_sets_global_git_config(alice, monkeypatch):
+    """Everything `collab init`/`collab config set` used to configure from
+    the terminal needs a Settings equivalent, since the packaged app can't
+    assume anyone has a terminal. Must call git with --global (not a
+    per-repo config write) — same as `collab init` — without actually
+    touching this machine's real global git config in the test."""
+    app = menubar_app.OpenDamMenuBarApp()
+    app.settings = AppSettings(repo_path=str(alice))
+    monkeypatch.setattr(app, "_prompt_settings_text", lambda *a, **kw: "dana@example.com")
+    original_run_git = menubar_app.git_ops.run_git
+    global_calls = []
+
+    def fake_run_git(args, repo, **kw):
+        if "--global" in args:
+            global_calls.append((args, repo))
+            return None
+        return original_run_git(args, repo, **kw)
+
+    monkeypatch.setattr(menubar_app.git_ops, "run_git", fake_run_git)
+
+    app._change_git_email(None)
+
+    assert global_calls == [(["config", "--global", "user.email", "dana@example.com"], alice)]
+
+
+def test_change_git_email_cancelled_does_nothing(alice, monkeypatch):
+    app = menubar_app.OpenDamMenuBarApp()
+    app.settings = AppSettings(repo_path=str(alice))
+    monkeypatch.setattr(app, "_prompt_settings_text", lambda *a, **kw: None)
+    original_run_git = menubar_app.git_ops.run_git
+    global_calls = []
+
+    def fake_run_git(args, repo, **kw):
+        if "--global" in args:
+            global_calls.append((args, repo))
+            return None
+        return original_run_git(args, repo, **kw)
+
+    monkeypatch.setattr(menubar_app.git_ops, "run_git", fake_run_git)
+
+    app._change_git_email(None)
+
+    assert global_calls == []
+
+
+def test_change_media_root_saves_cleaned_path(alice, monkeypatch, tmp_path):
+    app = menubar_app.OpenDamMenuBarApp()
+    app.settings = AppSettings(repo_path=str(alice))
+    media = tmp_path / "Media SSD"
+    media.mkdir()
+    monkeypatch.setattr(app, "_prompt_settings_text", lambda *a, **kw: f"'{media}'")
+
+    app._change_media_root(None)
+
+    assert config_mod.Config.load(alice).media_root == str(media)
+
+
+def test_change_media_root_can_be_cleared(alice, monkeypatch, tmp_path):
+    cfg = config_mod.Config.load(alice)
+    cfg.media_root = str(tmp_path)
+    cfg.save(alice)
+
+    app = menubar_app.OpenDamMenuBarApp()
+    app.settings = AppSettings(repo_path=str(alice))
+    monkeypatch.setattr(app, "_prompt_settings_text", lambda *a, **kw: "")
+
+    app._change_media_root(None)
+
+    assert config_mod.Config.load(alice).media_root is None
+
+
+def test_change_premiere_path_prefills_autodiscovered_candidate(alice, monkeypatch):
+    monkeypatch.setattr(menubar_app.config_mod, "discover_premiere", lambda: ["/Applications/Adobe Premiere Pro 2026/Adobe Premiere Pro 2026.app"])
+    app = menubar_app.OpenDamMenuBarApp()
+    app.settings = AppSettings(repo_path=str(alice))
+    seen_defaults = []
+
+    def fake_prompt(title, message, default_text):
+        seen_defaults.append(default_text)
+        return default_text
+
+    monkeypatch.setattr(app, "_prompt_settings_text", fake_prompt)
+
+    app._change_premiere_path(None)
+
+    assert seen_defaults == ["/Applications/Adobe Premiere Pro 2026/Adobe Premiere Pro 2026.app"]
+    assert config_mod.Config.load(alice).premiere.app_path == seen_defaults[0]
+
+
+def test_change_template_path_saves(alice, monkeypatch, tmp_path):
+    template = tmp_path / "House Style.prproj"
+    template.write_text("template\n")
+    app = menubar_app.OpenDamMenuBarApp()
+    app.settings = AppSettings(repo_path=str(alice))
+    monkeypatch.setattr(app, "_prompt_settings_text", lambda *a, **kw: str(template))
+
+    app._change_template_path(None)
+
+    assert config_mod.Config.load(alice).template_path == str(template)
+
+
+def test_change_stale_lock_hours_saves_int(alice, monkeypatch):
+    app = menubar_app.OpenDamMenuBarApp()
+    app.settings = AppSettings(repo_path=str(alice))
+    monkeypatch.setattr(app, "_prompt_settings_text", lambda *a, **kw: "48")
+
+    app._change_stale_lock_hours(None)
+
+    assert config_mod.Config.load(alice).stale_lock_hours == 48
+
+
+def test_change_stale_lock_hours_rejects_non_numeric(alice, monkeypatch):
+    original = config_mod.Config.load(alice).stale_lock_hours
+    app = menubar_app.OpenDamMenuBarApp()
+    app.settings = AppSettings(repo_path=str(alice))
+    monkeypatch.setattr(app, "_prompt_settings_text", lambda *a, **kw: "not-a-number")
+    alerts = []
+    monkeypatch.setattr(menubar_app.rumps, "alert", lambda *a, **kw: alerts.append(a))
+
+    app._change_stale_lock_hours(None)
+
+    assert len(alerts) == 1
+    assert config_mod.Config.load(alice).stale_lock_hours == original

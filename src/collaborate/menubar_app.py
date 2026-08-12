@@ -228,11 +228,132 @@ class OpenDamMenuBarApp(rumps.App):
         self.menu.add(rumps.separator)
         self.menu.add(rumps.MenuItem("New Project…", callback=self._make_new_project(), key="n"))
         self.menu.add(rumps.MenuItem("Sync Now", callback=lambda _s: self.refresh(), key="r"))
-        self.menu.add(rumps.MenuItem("Settings…", callback=self._change_folder, key=","))
+        self.menu.add(self._build_settings_menu())
         self.menu.add(rumps.MenuItem("Quit Collaborate", callback=rumps.quit_application, key="q"))
+
+    def _build_settings_menu(self) -> "rumps.MenuItem":
+        """Everything `collab init` / `collab config set` used to cover from
+        the terminal, since the packaged app can't assume anyone running it
+        has one — see docs/menubar-app.md."""
+        settings = rumps.MenuItem("Settings")
+        settings.add(rumps.MenuItem("Library Folder…", callback=self._change_folder))
+        settings.add(rumps.MenuItem("Git Identity (Email)…", callback=self._change_git_email))
+        settings.add(rumps.separator)
+        settings.add(rumps.MenuItem("Media Root…", callback=self._change_media_root))
+        settings.add(rumps.MenuItem("Premiere Pro App…", callback=self._change_premiere_path))
+        settings.add(rumps.MenuItem("New Project Template…", callback=self._change_template_path))
+        settings.add(rumps.MenuItem("Stale Lock Hours…", callback=self._change_stale_lock_hours))
+        return settings
 
     def _change_folder(self, _sender) -> None:
         self._prompt_for_repo_path(initial=False)
+        self.refresh()
+
+    def _prompt_settings_text(self, title: str, message: str, default_text: str) -> Optional[str]:
+        """A single-field text prompt pre-filled with the current value —
+        distinct from _prompt_text (used by Add Note/New Project) because
+        those never have a sensible default to show. rumps has no
+        multi-field form, so each Settings entry gets its own prompt rather
+        than one big wizard. Returns None if cancelled (unlike _prompt_text,
+        an explicitly-cleared-then-saved value is a real "" here, not None —
+        callers use that to distinguish "clear this setting" from "leave it
+        alone")."""
+        window = rumps.Window(
+            message=message,
+            title=title,
+            default_text=default_text,
+            ok="Save",
+            cancel="Cancel",
+            dimensions=(320, 24),
+        )
+        _activate()
+        response = window.run()
+        if not response.clicked:
+            return None
+        return response.text.strip()
+
+    def _change_git_email(self, _sender) -> None:
+        if not self.repo_path:
+            return
+        current = git_ops.get_config(self.repo_path, "user.email") or ""
+        text = self._prompt_settings_text(
+            "Git Identity",
+            "Your git email — used to attribute checkouts/checkins to you.",
+            current,
+        )
+        if not text:
+            return
+        git_ops.run_git(["config", "--global", "user.email", text], self.repo_path)
+        self.refresh()
+
+    def _change_media_root(self, _sender) -> None:
+        if not self.repo_path:
+            return
+        cfg = config_mod.Config.load(self.repo_path)
+        text = self._prompt_settings_text(
+            "Media Root",
+            "Path to your local media root (same relative layout as other editors).",
+            cfg.media_root or "",
+        )
+        if text is None:
+            return
+        cfg.media_root = config_mod.clean_path_input(text)
+        cfg.save(self.repo_path)
+        self.refresh()
+
+    def _change_premiere_path(self, _sender) -> None:
+        if not self.repo_path:
+            return
+        cfg = config_mod.Config.load(self.repo_path)
+        current = cfg.premiere.app_path or cfg.premiere.exe_path or ""
+        if not current:
+            candidates = config_mod.discover_premiere()
+            current = candidates[0] if candidates else ""
+        text = self._prompt_settings_text(
+            "Premiere Pro App",
+            "Path to Premiere Pro (auto-detected below if found — edit to override).",
+            current,
+        )
+        if text is None:
+            return
+        cfg.premiere.app_path = config_mod.clean_path_input(text)
+        cfg.save(self.repo_path)
+        self.refresh()
+
+    def _change_template_path(self, _sender) -> None:
+        if not self.repo_path:
+            return
+        cfg = config_mod.Config.load(self.repo_path)
+        text = self._prompt_settings_text(
+            "New Project Template",
+            "Path to a template .prproj used by 'New Project…'.",
+            cfg.template_path or "",
+        )
+        if text is None:
+            return
+        cfg.template_path = config_mod.clean_path_input(text)
+        cfg.save(self.repo_path)
+        self.refresh()
+
+    def _change_stale_lock_hours(self, _sender) -> None:
+        if not self.repo_path:
+            return
+        cfg = config_mod.Config.load(self.repo_path)
+        text = self._prompt_settings_text(
+            "Stale Lock Hours",
+            "Hours a lock can be held before it's flagged as stale (⚠) for others.",
+            str(cfg.stale_lock_hours),
+        )
+        if not text:
+            return
+        try:
+            hours = int(text)
+        except ValueError:
+            _activate()
+            rumps.alert("Collaborate", f"'{text}' isn't a whole number of hours.")
+            return
+        cfg.stale_lock_hours = hours
+        cfg.save(self.repo_path)
         self.refresh()
 
     def _build_item(self, entry: ProjectEntry) -> "rumps.MenuItem":
