@@ -5,6 +5,9 @@ __pycache__/
 .venv/
 build/
 dist/
+# ^ also covers macapp/build/ and macapp/dist/ (the built Collaborate.app),
+# since git matches these anywhere in the tree, not just at the root
+.macapp-build-venv/
 
 # per-machine config — never shared via git
 .collabconfig.yaml

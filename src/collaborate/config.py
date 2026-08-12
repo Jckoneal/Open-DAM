@@ -7,6 +7,7 @@ from __future__ import annotations
 import glob
 import platform
 import subprocess
+import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -15,6 +16,21 @@ import yaml
 
 CONFIG_FILENAME = ".collabconfig.yaml"
 DEFAULT_STALE_LOCK_HOURS = 24
+DEFAULT_TEMPLATE_RESOURCE = "Template.prproj"
+
+
+def _bundled_resource_path(name: str) -> Optional[str]:
+    """Path to a resource bundled inside the packaged Collaborate.app
+    (built via macapp/setup.py + py2app), or None when running unpackaged
+    (pip install, `collab` CLI, `collab menubar` from source) — there's
+    nothing bundled in that case. py2app sets sys.frozen when running from
+    a built .app; the executable then lives at Contents/MacOS/<name>, with
+    our DATA_FILES landing in the sibling Contents/Resources/."""
+    if not getattr(sys, "frozen", False):
+        return None
+    resources = Path(sys.executable).resolve().parent.parent / "Resources"
+    candidate = resources / name
+    return str(candidate) if candidate.exists() else None
 
 
 @dataclass
@@ -36,20 +52,27 @@ class Config:
     def load(cls, repo: Path) -> "Config":
         path = repo / CONFIG_FILENAME
         if not path.exists():
-            return cls()
-        raw = yaml.safe_load(path.read_text()) or {}
-        premiere_raw = raw.pop("premiere", {}) or {}
-        if isinstance(premiere_raw, str):
-            # Recovers from a pre-fix `collab config set premiere <path>` (the
-            # bare key, not `premiere.app_path`), which used to overwrite
-            # this whole section with a plain string instead of a mapping.
-            premiere_raw = {"app_path": premiere_raw}
-        elif not isinstance(premiere_raw, dict):
-            premiere_raw = {}
-        cfg = cls(**{k: v for k, v in raw.items() if k in cls.__dataclass_fields__})
-        cfg.premiere = PremiereConfig(
-            **{k: v for k, v in premiere_raw.items() if k in PremiereConfig.__dataclass_fields__}
-        )
+            cfg = cls()
+        else:
+            raw = yaml.safe_load(path.read_text()) or {}
+            premiere_raw = raw.pop("premiere", {}) or {}
+            if isinstance(premiere_raw, str):
+                # Recovers from a pre-fix `collab config set premiere <path>`
+                # (the bare key, not `premiere.app_path`), which used to
+                # overwrite this whole section with a plain string instead
+                # of a mapping.
+                premiere_raw = {"app_path": premiere_raw}
+            elif not isinstance(premiere_raw, dict):
+                premiere_raw = {}
+            cfg = cls(**{k: v for k, v in raw.items() if k in cls.__dataclass_fields__})
+            cfg.premiere = PremiereConfig(
+                **{k: v for k, v in premiere_raw.items() if k in PremiereConfig.__dataclass_fields__}
+            )
+        if not cfg.template_path:
+            # Nobody's set one explicitly — if we're running from the
+            # packaged app, its bundled default is a better fallback than
+            # "New Project needs a template" for a first-time user.
+            cfg.template_path = _bundled_resource_path(DEFAULT_TEMPLATE_RESOURCE)
         return cfg
 
     def save(self, repo: Path) -> None:

@@ -42,11 +42,44 @@ hooks — see [the Premiere panel](premiere-panel.md) for that piece if you use 
 
 ## Requirements
 
-macOS. Your Mac's login `git` identity configured, and the project library
-already cloned + `collab init` run once (see the
-[Getting Started guide](getting-started.md)).
+macOS and, for the CLI-installed route below, your Mac's login `git`
+identity configured. Either way, the project library needs to already be
+cloned + `collab init` run once (see the
+[Getting Started guide](getting-started.md)) — the packaged app's first-run
+dialog handles the clone-folder part, but not cloning itself.
 
-## Install
+## Install — packaged app (no Python needed)
+
+A real, double-clickable `Collaborate.app`, built with
+[py2app](https://py2app.readthedocs.io/): it bundles its own Python runtime,
+so whoever runs it doesn't need Python, pip, or `rumps` installed at all —
+just drag it to Applications like any other Mac app. This is the easier
+option for teammates who aren't going to touch a terminal.
+
+```bash
+./scripts/build-macapp.sh
+```
+
+Builds `macapp/dist/Collaborate.app`. Drag that into `/Applications`, then
+launch it. **It's unsigned** (no Apple Developer ID here to sign/notarize
+with), so the very first launch needs **right-click → Open** instead of a
+plain double-click — Gatekeeper will otherwise say it "can't verify the
+developer." After that first approval, it opens normally.
+
+To start it automatically at login: System Settings → General → Login
+Items → add `Collaborate.app`. (No LaunchAgent needed for this route — that's
+only for the CLI-installed version below, which isn't a real login item
+macOS knows about.)
+
+A real bundle also resolves two rough edges the CLI-run version has to work
+around: it gets a proper macOS activation policy from its own Info.plist
+(`LSUIElement`) instead of having to set one at runtime, and it has a real
+`CFBundleIdentifier`, so OS notifications *should* work here even though the
+CLI-installed version's don't need one. Its "New Project…" also has a
+built-in default template out of the box (nothing to configure) — see
+["How it works"](#how-it-works-for-maintainers) below.
+
+## Install — via pip (for developers, or if you'll also use the `collab` CLI)
 
 ```bash
 pip install -e ".[menubar]"     # from a clone of this (Collaborate) repository
@@ -144,6 +177,24 @@ arrow-key-navigable suggestions list" pattern
 (`control:textView:doCommandBySelector:` — the same mechanism many real Mac
 apps use for this), not a from-scratch keyboard-event reimplementation.
 
+**The packaged app** (`macapp/`) builds the exact same `menubar_app.run()` as
+a real `.app` bundle via py2app — `macapp/launcher.py` is a one-line entry
+script for py2app's static analysis to start from, and `macapp/setup.py`
+configures the bundle (icon, `CFBundleIdentifier`, `LSUIElement`, and
+`macapp/resources/Template.prproj` as a bundled data file).
+`scripts/build-macapp.sh` does the actual build, in a disposable venv with
+`collaborate` installed as a *regular* (non-editable) package — py2app's
+`modulegraph` needs real files sitting in `site-packages` to freeze into the
+bundle, not an editable install's import-hook indirection. The one
+packaging-aware piece of runtime code is `collaborate.config`'s
+`_bundled_resource_path`: when `sys.frozen` is set (true only inside a
+py2app build, never for `pip install`/`collab`), an unconfigured
+`template_path` falls back to the bundled template instead of staying empty.
+The app icon and bundled template both come from the same Claude Design
+project as the menu bar icon and wireframes (see the top of this file);
+`AppIcon.icns` was generated from that project's 1024px export via `sips` +
+`iconutil`, both standard macOS command-line tools.
+
 Known limitations:
 
 - **macOS only**, same as the Premiere launcher.
@@ -153,10 +204,13 @@ Known limitations:
 - **New Project… needs a configured template.** Without one, creating a
   project still needs the Terminal (`collab new`), which can walk you through
   the manual-save flow interactively in a way a single menu click can't.
-- No OS notification center integration — it needs a real `.app` bundle
-  identity (`CFBundleIdentifier`) that a bare script run via the `collab`
-  console command structurally can't have, so success/freed-project feedback
-  shows as a title-text flash instead.
+- **No OS notification center integration for the pip-installed version** —
+  it needs a real `.app` bundle identity (`CFBundleIdentifier`) that a bare
+  script run via the `collab` console command structurally can't have, so
+  success/freed-project feedback shows as a title-text flash instead. The
+  packaged app *does* have a real `CFBundleIdentifier`, so this should work
+  there — not verified interactively from this environment, though, so treat
+  it as untested rather than guaranteed.
 - **The ⌘⇧C global hotkey is best-effort.** `NSEvent`'s *global* event
   monitor — the only way to catch a hotkey while some other app is
   frontmost — silently does nothing unless the process running it has
