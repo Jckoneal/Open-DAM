@@ -1,4 +1,7 @@
+import subprocess
+
 from collaborate import git_ops
+from collaborate.errors import RemoteUnreachableError
 
 
 def test_fetch_and_pull(alice):
@@ -6,6 +9,45 @@ def test_fetch_and_pull(alice):
     assert result.ok
     result = git_ops.pull_ff_only(alice)
     assert result.ok
+
+
+def test_network_call_timeout_raises_remote_unreachable(alice, monkeypatch):
+    """A fetch/pull/push stuck on an unanswerable SSH host-key/credential
+    prompt (nothing running it has a terminal to answer in — the menu bar
+    app's periodic sync least of all) used to hang forever, freezing
+    whatever thread called it. run_git's network timeout must turn that
+    into a normal, catchable OpenDamError instead."""
+    def fake_run(*_a, **_kw):
+        raise subprocess.TimeoutExpired(cmd="git fetch", timeout=git_ops.NETWORK_TIMEOUT_SECONDS)
+
+    monkeypatch.setattr(git_ops.subprocess, "run", fake_run)
+
+    try:
+        git_ops.fetch(alice)
+        assert False, "expected RemoteUnreachableError"
+    except RemoteUnreachableError:
+        pass
+
+
+def test_local_only_calls_get_no_network_env_or_timeout(alice, monkeypatch):
+    """config/rev-parse/commit/etc. never touch a remote — they must not
+    get the network env override (which disables SSH host-key/credential
+    prompting; fine for an unattended fetch, wrong for e.g. a legitimate
+    first-time `collab clone` prompt a human is present to answer) or a
+    timeout that could cut off a slow local operation on a huge repo."""
+    seen = {}
+
+    def fake_run(args, cwd, capture_output, text, env, timeout):
+        seen["env"] = env
+        seen["timeout"] = timeout
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(git_ops.subprocess, "run", fake_run)
+
+    git_ops.run_git(["status"], alice)
+
+    assert seen["env"] is None
+    assert seen["timeout"] is None
 
 
 def test_is_dirty(alice):

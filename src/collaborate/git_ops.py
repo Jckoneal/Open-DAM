@@ -7,6 +7,7 @@ offline) rather than an abstraction library's interpretation of them.
 
 from __future__ import annotations
 
+import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,6 +15,21 @@ from pathlib import Path
 from collaborate.errors import GitCommandError, PushContendedError, RemoteUnreachableError
 
 DEFAULT_PUSH_RETRIES = 5
+
+# A fetch/pull/push stuck waiting on an SSH host-key or credential prompt
+# would otherwise hang forever: nothing here has a terminal to show that
+# prompt in (the menu bar app's periodic sync runs from a timer, unattended),
+# so the prompt can never be answered. GIT_TERMINAL_PROMPT=0 makes git itself
+# fail fast instead of prompting; BatchMode=yes does the same for the SSH
+# transport specifically; ConnectTimeout bounds a plain unreachable host.
+NETWORK_TIMEOUT_SECONDS = 20
+
+
+def _network_env() -> dict:
+    env = dict(os.environ)
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    env.setdefault("GIT_SSH_COMMAND", "ssh -o BatchMode=yes -o ConnectTimeout=10")
+    return env
 
 NETWORK_ERROR_MARKERS = (
     "could not resolve host",
@@ -52,13 +68,23 @@ class GitResult:
     returncode: int
 
 
-def run_git(args: list[str], cwd: Path, check: bool = True) -> GitResult:
-    proc = subprocess.run(
-        ["git", *args],
-        cwd=str(cwd),
-        capture_output=True,
-        text=True,
-    )
+def run_git(args: list[str], cwd: Path, check: bool = True, network: bool = False) -> GitResult:
+    """network=True marks a call that talks to a remote (fetch/pull/push) —
+    it gets the no-hang env (see _network_env) and a hard timeout, neither of
+    which local-only calls (config/commit/rev-parse/...) need or should risk."""
+    try:
+        proc = subprocess.run(
+            ["git", *args],
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            env=_network_env() if network else None,
+            timeout=NETWORK_TIMEOUT_SECONDS if network else None,
+        )
+    except subprocess.TimeoutExpired:
+        raise RemoteUnreachableError(
+            f"'git {' '.join(args)}' timed out after {NETWORK_TIMEOUT_SECONDS}s — remote unreachable?"
+        )
     result = GitResult(
         ok=proc.returncode == 0,
         stdout=proc.stdout,
@@ -85,13 +111,13 @@ def _is_unborn_remote_branch(result: GitResult) -> bool:
 
 
 def fetch(repo: Path, remote: str = "origin") -> GitResult:
-    return run_git(["fetch", remote], repo)
+    return run_git(["fetch", remote], repo, network=True)
 
 
 def pull_ff_only(repo: Path, remote: str = "origin", branch: str | None = None) -> GitResult:
     branch = branch or current_branch(repo)
     args = ["pull", "--ff-only", remote, branch]
-    result = run_git(args, repo, check=False)
+    result = run_git(args, repo, check=False, network=True)
     if not result.ok and not _is_unborn_remote_branch(result):
         _raise_git_error(args, result)
     return result
@@ -103,7 +129,7 @@ def pull_rebase(repo: Path, remote: str = "origin", branch: str | None = None) -
     the lock holder touches a given project's files, so this can only
     replay cleanly — never a real content conflict."""
     branch = branch or current_branch(repo)
-    return run_git(["pull", "--rebase", remote, branch], repo, check=False)
+    return run_git(["pull", "--rebase", remote, branch], repo, check=False, network=True)
 
 
 def reset_soft(repo: Path, ref: str = "HEAD~1") -> GitResult:
@@ -126,7 +152,7 @@ def push(repo: Path, remote: str = "origin", branch: str | None = None) -> GitRe
     """Push without raising on non-fast-forward rejection — callers need to
     distinguish that from a hard failure to drive the retry loop."""
     branch = branch or current_branch(repo)
-    return run_git(["push", "-u", remote, branch], repo, check=False)
+    return run_git(["push", "-u", remote, branch], repo, check=False, network=True)
 
 
 def is_push_rejected(result: GitResult) -> bool:

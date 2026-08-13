@@ -40,6 +40,25 @@ class _FakeWindow:
         return self
 
 
+def _make_refresh_synchronous(monkeypatch):
+    """refresh() now does its git/lock work on a background thread and
+    marshals the result back via AppHelper.callAfter (see menubar_app.py —
+    this used to run inline on the calling thread, which froze the whole app
+    for the duration of a slow or hung git fetch). There's no real run loop
+    pumping callAfter in a test process, so a test that wants refresh()'s
+    effects to be visible immediately after it returns needs both the thread
+    and the callback to run synchronously in-place instead."""
+    class _ImmediateThread:
+        def __init__(self, target=None, daemon=None):
+            self._target = target
+
+        def start(self):
+            self._target()
+
+    monkeypatch.setattr(menubar_app.threading, "Thread", _ImmediateThread)
+    monkeypatch.setattr(menubar_app.AppHelper, "callAfter", lambda fn, *a: fn(*a))
+
+
 def test_repo_path_never_raises_when_unconfigured():
     """Regression: rumps' internal dispatch (call_as_function_or_method)
     runs inspect.getmembers(app, predicate=inspect.ismethod) before invoking
@@ -341,10 +360,11 @@ def test_checkin_cancel_button_does_nothing(alice, monkeypatch):
     assert lock.is_held_by("alice@example.com")
 
 
-def test_refresh_flashes_title_when_someone_else_frees_a_project(alice, bob):
+def test_refresh_flashes_title_when_someone_else_frees_a_project(alice, bob, monkeypatch):
     """Integration of menubar_model.freed_by_others into refresh(): a
     project that was locked by someone else on the last refresh and is
     now free should flash the title, even though nothing we did caused it."""
+    _make_refresh_synchronous(monkeypatch)
     runner.invoke(cli_app, ["checkout", "MyProject", "--repo", str(alice), "--no-launch"])
 
     app = menubar_app.OpenDamMenuBarApp()

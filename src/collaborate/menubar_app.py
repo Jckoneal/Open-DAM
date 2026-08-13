@@ -97,6 +97,7 @@ class OpenDamMenuBarApp(rumps.App):
         super().__init__("Collaborate", icon=ICON_PATH, template=True, quit_button=None)
         self.settings = AppSettings.load()
         self._busy = False
+        self._syncing = False
         self._last_entries: Optional[list] = None
         self.refresh_timer = None
         self._palette = SearchPalette(on_run=self._run_palette_action)
@@ -179,19 +180,48 @@ class OpenDamMenuBarApp(rumps.App):
             self.refresh()
 
     def refresh(self) -> None:
+        """Fetch/pull + rebuild the entry list on a background thread —
+        this used to run inline on whatever thread called refresh(), which
+        in practice was always the main thread (the periodic timer, or
+        _change_* Settings handlers). A slow or hung remote (e.g. an SSH
+        fetch stuck waiting on a host-key/credential prompt that will never
+        be answered, since nothing here has a terminal to show it in) froze
+        the entire app — every menu click, every timer tick — for as long as
+        the git subprocess sat there. git_ops.run_git's network-call timeout
+        bounds that hang; running here off the main thread means even a
+        bounded hang no longer blocks the UI while it waits."""
         if not self.settings.repo_path:
             return
-        warning = sync_repo(self.repo_path)
-        cfg = config_mod.Config.load(self.repo_path)
-        media_warning = check_media_root(cfg.media_root)
-        entries = build_entries(self.repo_path, cfg.stale_lock_hours)
+        if self._syncing:
+            return
+        self._syncing = True
+        repo_path = self.repo_path
 
+        def worker():
+            try:
+                warning = sync_repo(repo_path)
+                cfg = config_mod.Config.load(repo_path)
+                media_warning = check_media_root(cfg.media_root)
+                entries = build_entries(repo_path, cfg.stale_lock_hours)
+            except Exception as e:  # pragma: no cover - refresh must never wedge the timer loop
+                AppHelper.callAfter(self._refresh_failed, e)
+                return
+            AppHelper.callAfter(self._apply_refresh, warning, media_warning, entries)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _apply_refresh(self, warning, media_warning, entries) -> None:
+        self._syncing = False
         freed = freed_by_others(self._last_entries, entries) if self._last_entries is not None else []
         self._last_entries = entries
 
         self._render(entries, [w for w in (warning, media_warning) if w])
         if freed:
             self._flash_title(f"✓ {', '.join(freed)} free")
+
+    def _refresh_failed(self, exc) -> None:
+        self._syncing = False
+        print(f"Collaborate: refresh failed: {exc}")
 
     def _render(self, entries: list[ProjectEntry], warnings: list[str]) -> None:
         self.menu.clear()
