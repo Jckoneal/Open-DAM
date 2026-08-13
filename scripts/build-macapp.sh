@@ -26,3 +26,8 @@ echo
 echo "Built: macapp/dist/Collaborate.app"
 echo "Drag it to /Applications, then double-click it."
 echo "First launch: right-click > Open (unsigned build) instead of double-clicking."
+echo
+echo "Sending this to someone else (Slack/email/a cloud drive)? Right-click > Open"
+echo "isn't enough once it's traveled through any of those - have them run this in"
+echo "/Applications instead:"
+echo "  xattr -cr /Applications/Collaborate.app"

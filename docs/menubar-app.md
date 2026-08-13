@@ -69,6 +69,25 @@ with), so the very first launch needs **right-click → Open** instead of a
 plain double-click — Gatekeeper will otherwise say it "can't verify the
 developer." After that first approval, it opens normally.
 
+**Sending it to someone else (Slack, email, a cloud drive)?** Right-click →
+Open stops being enough once the app has traveled through any of those —
+zipping it and sending it over Slack/email/Drive gets it tagged with a
+"downloaded from the internet" quarantine flag, and combined with being
+unsigned, newer macOS versions show a block dialog with no bypass button at
+all (not even in System Settings, some of the time). The reliable fix, run
+by whoever received it, once it's in `/Applications`:
+
+```bash
+xattr -cr /Applications/Collaborate.app
+```
+
+That strips the quarantine flag (and everything else) so it opens like a
+normal app — no right-click dance needed after that. If it prints a
+permissions error, prefix it with `sudo`. GUI alternative, no Terminal: try
+to open it once (it'll get blocked), then System Settings → Privacy &
+Security → Security, where a "'Collaborate' was blocked" message appears
+with an **Open Anyway** button.
+
 To start it automatically at login: System Settings → General → Login
 Items → add `Collaborate.app`. (No LaunchAgent needed for this route — that's
 only for the CLI-installed version below, which isn't a real login item
